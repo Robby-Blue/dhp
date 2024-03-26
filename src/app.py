@@ -26,13 +26,41 @@ def get_posts():
 
 @app.route('/api/posts/<post_id>')
 def get_post(post_id):
-    result = db.query("SELECT * FROM posts WHERE id=%s and is_self=true", (post_id,))
+    global_search = "@" in post_id
+    if global_search:
+        id_segments = post_id.split("@")
+        post_id = id_segments[0]
 
-    if len(result) == 0:
+    result = db.query("SELECT * FROM posts WHERE id=%s", (post_id,))
+
+    if len(result) > 0: # post found
+        post = result[0]
+        return jsonify(format_post(post))
+
+    if not global_search: # was local search and no post
         return "post not found", 404
-    
-    post = result[0]
-    return jsonify(format_post(post))
+
+    # global search and no post found, continue
+    id_segments = post_id.split("@")
+    post_id = id_segments[0]
+
+    domain = fix_url(id_segments[1])
+
+    url = f"{domain}/api/posts/{post_id}"
+
+    data = requests.get(url)
+
+    if not data:
+        return f"{url} returned {data.status_code}", 500
+
+    post = data.json()
+    post["is_self"] = False
+    post["user"] = domain
+    db.execute("""
+INSERT INTO posts (id, is_self, user, text, posted_at)
+VALUES (%s, %s, %s, %s, %s)""",
+(post["id"], False, domain, post["text"], datetime.fromtimestamp(post["posted_at"], tz=timezone.utc)))
+    return jsonify(post)
 
 @app.route('/api/createpost/', methods=['POST'])
 def createpost():
@@ -90,42 +118,12 @@ VALUES (
 
     return "posted", 200
 
-@app.route('/api/sharepost/', methods=['POST'])
-def sharepost():
-    json_data = request.json
-    post_id = json_data["id"]
-
-    domain, error = fix_url(json_data["domain"])
-    if error:
-        return error, 400
-
-    result = db.query("SELECT * FROM posts WHERE id=%s", (post_id,))
-    if len(result) != 0:
-        return "post already exists", 400
-    
-    url = f"{domain}/api/posts/{post_id}"
-
-    data = requests.get(url)
-
-    if not data:
-        return f"{url} returned {data.status_code}", 500
-
-    post = data.json()
-    db.execute("""
-INSERT INTO posts (id, is_self, user, text, posted_at)
-VALUES (%s, %s, %s, %s, %s)""",
-(post["id"], False, domain, post["text"], datetime.fromtimestamp(post["posted_at"], tz=timezone.utc)))
-
-    return "posted", 200
-
 @app.route('/api/sharecomment/', methods=['POST'])
 def sharecomment():
     json_data = request.json
     comment_id = json_data["id"]
 
-    domain, error = fix_url(json_data["domain"])
-    if error:
-        return error, 400
+    domain = fix_url(json_data["domain"])
 
     result = db.query("SELECT * FROM comments WHERE id=%s", (comment_id,))
     if len(result) != 0:
@@ -201,20 +199,15 @@ def get_parent(parent):
         return "parent not found", None, None
     return False, parent_post_id, parent_comment_id
 
-def validate_url(parsed_url):
-    if not parsed_url.scheme:
-        return False, "needs scheme"
-    return True, None
-
 def fix_url(given_domain):
+    if not given_domain.startswith("http"):
+        default_scheme = os.getenv("DEFAULT_SCHEME")
+        given_domain=f"{default_scheme}://{given_domain}"
     parsed_url = urlparse(given_domain)
-    valid, reason = validate_url(parsed_url)
-    if not valid:
-        return None, reason
     domain = parsed_url.scheme+"://"+parsed_url.hostname
     if parsed_url.port:
         domain+=":"+str(parsed_url.port)
-    return domain, None
+    return domain
 
 if __name__ == '__main__':
     app.run(host=os.getenv("HOST"), port=os.getenv("PORT"))
