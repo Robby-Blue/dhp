@@ -2,10 +2,10 @@ import os
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 
-import backend
-
 # setup
 load_dotenv(".env")
+
+import backend
 
 # web server
 app = Flask(__name__)

@@ -52,10 +52,22 @@ CREATE TABLE IF NOT EXISTS likes (
 );
 """)
 
+        self.execute("""
+CREATE TABLE IF NOT EXISTS failed_shares (
+    user TEXT NOT NULL,
+    comment_id CHAR(36) NOT NULL,
+    FOREIGN KEY (comment_id) REFERENCES comments(id)
+);
+""")
+
     def query(self, statement, values=()):
         self.cursor.execute(statement, values)
         return self.cursor.fetchall()
 
     def execute(self, statement, values=()):
+        self.cursor.execute(statement, values)
+        self.connection.commit()
+
+    def execute_many(self, statement, values=[()]):
         self.cursor.execute(statement, values)
         self.connection.commit()

@@ -30,7 +30,6 @@ def get_post(post_id):
         return {"error": "post not found"}, 404
 
     # global search and no post found, continue
-    id_segments = post_id.split("@")
     post_id = id_segments[0]
 
     domain = fix_url(id_segments[1])
@@ -80,17 +79,69 @@ def create_comment(text, parent):
     if error:
         return {"error": error}, 400
 
+    # write comment to db
+    uuid = db.query("SELECT UUID();")[0]["UUID()"]
+    # need the uuid for later
     db.execute("""
 INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, text) 
 VALUES (
-    UUID(),
+    %s,
     true,
     %s,
     %s,
     %s
-)
-""", (parent_post_id, parent_comment_id, text))
+);
+""", (uuid, parent_post_id, parent_comment_id, text))
+
+    # now need to share the comment with other instances
+    # first, figure out which instances to share to
+    # instance of post and all comments
+    post, _ = get_post(parent_post_id)
+    instances = [post["user"]]
+
+    result = db.query("""
+WITH RECURSIVE comment_tree AS (
+    SELECT
+        id, user
+    FROM comments WHERE
+        parent_post_id = %s AND parent_comment_id is NULL
     
+    UNION ALL
+    
+    SELECT
+        c.id, c.user
+    FROM comments c
+    INNER JOIN
+        comment_tree ct ON c.parent_comment_id = ct.id
+)
+SELECT * FROM comment_tree;""", (parent_post_id,))
+    
+    for row in result:
+        user = row["user"]
+        if user not in instances:
+            instances.append(user)
+
+    fails = []
+
+    for instance in instances:
+        if not instance:
+            continue
+        success = False
+        try:
+            r = requests.post(f"{instance}/api/sharecomment/", 
+                json={"domain": "localhost:3000", "id": uuid})
+            if r.status_code == 200:
+                success = True
+        except:
+            pass
+        if not success:
+            fails.append(instance)
+
+    if fails:
+        db.execute_many("""
+INSERT INTO failed_shares (user, comment_id) VALUES (%s, %s) 
+""", [(instance, uuid) for instance in fails])
+
     return {"success": True}, 200
 
 def share_comment(comment_id, domain):
@@ -159,14 +210,17 @@ def get_parent(parent):
 
     if parent_type == "post":
         result = db.query("SELECT * FROM posts WHERE id=%s", (parent_id,))
+        if len(result) == 0:
+            return "parent not found", None, None
         parent_post_id = parent_id
     elif parent_type == "comment":
         result = db.query("SELECT * FROM comments WHERE id=%s", (parent_id,))
+        if len(result) == 0:
+            return "parent not found", None, None
         parent_comment_id = parent_id
+        parent_post_id = result["parent_post_id"]
     else:
         return "invalid parent type", None, None
-    if len(result) == 0:
-        return "parent not found", None, None
     return False, parent_post_id, parent_comment_id
 
 def fix_url(given_domain):
