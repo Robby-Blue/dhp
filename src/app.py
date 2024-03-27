@@ -10,6 +10,10 @@ import backend
 # web server
 app = Flask(__name__)
 
+@app.route('/api/')
+def api_index():
+    return jsonify(backend.get_index())
+
 @app.route('/api/posts/')
 def get_posts():
     return jsonify(backend.get_posts())
@@ -50,10 +54,10 @@ def createcomment():
 @app.route('/api/sharecomment/', methods=['POST'])
 def sharecomment():
     json_data = request.json
-    comment_id = json_data["id"]
+    comment = json_data["comment"]
     domain = json_data["domain"]
     
-    res, status_code = backend.share_comment(comment_id, domain)
+    res, status_code = backend.share_comment(comment, domain)
     return jsonify(res), status_code
 
 if __name__ == '__main__':

@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS posts (
     is_self BOOL NOT NULL,
     user TEXT,
     text TEXT NOT NULL,
-    posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    posted_at TIMESTAMP NOT NULL,
+    signature BLOB NOT NULL,
+    signature_verified BOOLEAN DEFAULT true,
     PRIMARY KEY (id)
 );
 """)
@@ -31,32 +33,19 @@ CREATE TABLE IF NOT EXISTS comments (
     parent_comment_id CHAR(36),
     user TEXT,
     text TEXT NOT NULL,
-    posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    posted_at TIMESTAMP NOT NULL,
+    signature BLOB NOT NULL,
+    signature_verified BOOLEAN DEFAULT true,
     PRIMARY KEY (id),
     FOREIGN KEY (parent_post_id) REFERENCES posts(id),
     FOREIGN KEY (parent_comment_id) REFERENCES comments(id)
 );
 """)
-
+        
         self.execute("""
-CREATE TABLE IF NOT EXISTS likes (
-    id CHAR(36) NOT NULL UNIQUE,
-    is_self BOOL NOT NULL,
-    liked_post_id CHAR(36),
-    liked_comment_id CHAR(36),
-    user TEXT,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    FOREIGN KEY (liked_post_id) REFERENCES posts(id),
-    FOREIGN KEY (liked_comment_id) REFERENCES comments(id)
-);
-""")
-
-        self.execute("""
-CREATE TABLE IF NOT EXISTS failed_shares (
-    user TEXT NOT NULL,
-    comment_id CHAR(36) NOT NULL,
-    FOREIGN KEY (comment_id) REFERENCES comments(id)
+CREATE TABLE IF NOT EXISTS users (
+    domain TEXT NOT NULL,
+    public_key TEXT NOT NULL
 );
 """)
 

@@ -1,14 +1,22 @@
 import os
 import requests
+import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from database_helper import DatabaseHelper
+import crypto_helper as crypto
 
 # db stuff
 db = DatabaseHelper()
 db.connect()
 db.setup()
+
+def get_index():
+    return {
+        "public_key": crypto.get_public_pem(),
+        "domain": self_domain
+    }
 
 def get_posts():
     result = db.query("SELECT * FROM posts WHERE is_self=true")
@@ -31,9 +39,7 @@ def get_post(post_id):
 
     # global search and no post found, continue
     post_id = id_segments[0]
-
     domain = fix_url(id_segments[1])
-
     url = f"{domain}/api/posts/{post_id}"
 
     data = requests.get(url)
@@ -41,24 +47,43 @@ def get_post(post_id):
     if not data:
         return {"error": f"{url} returned {data.status_code}"}, data.status_code
 
+    # post found, need to verify signature
     post = data.json()
+    signature = crypto.signature_from_string(post["signature"])
+
+    pubkey = get_pubkey_of_instance(domain)
+
+    if not crypto.verify_signature(crypto.stringify_post({
+        "id": post["id"],
+        "posted_at": post["posted_at"],
+        "text": post["text"],
+        "user": domain
+    }), signature, pubkey):
+        return {"error": f"couldnt verify signature"}, 400
+
     post["is_self"] = False
     post["user"] = domain
     db.execute("""
-INSERT INTO posts (id, is_self, user, text, posted_at)
-VALUES (%s, %s, %s, %s, %s)
-""", (post["id"], False, domain, post["text"], datetime.fromtimestamp(post["posted_at"], tz=timezone.utc)))
+INSERT INTO posts (id, is_self, user, text, posted_at, signature)
+VALUES (%s, %s, %s, %s, %s, %s)
+""", (post["id"], False, domain, post["text"], from_timestamp(post["posted_at"]), signature))
     return post, 200
 
 def create_post(text):
+    uuid = generate_id()
+    timestamp = to_timestamp(datetime.now())
+
+    signature = crypto.sign_string(crypto.stringify_post({
+        "id": uuid,
+        "posted_at": timestamp,
+        "text": text,
+        "user": self_domain
+    }))
+
     db.execute("""
-INSERT INTO posts (id, is_self, text)
-VALUES (
-    UUID(),
-    true,
-    %s
-)
-""", (text,))
+INSERT INTO posts (id, is_self, user, text, posted_at, signature)
+VALUES (%s, %s, %s, %s, %s, %s);
+""", (uuid, True, self_domain, text, from_timestamp(timestamp), signature))
 
 def get_comments():
     result = db.query("SELECT * FROM comments")
@@ -80,18 +105,23 @@ def create_comment(text, parent):
         return {"error": error}, 400
 
     # write comment to db
-    uuid = db.query("SELECT UUID();")[0]["UUID()"]
+    uuid = generate_id()
+    timestamp = to_timestamp(datetime.now())
+
+    signature = crypto.sign_string(crypto.stringify_comment({
+        "id": uuid,
+        "parent_post_id": parent_post_id,
+        "parent_comment_id": parent_comment_id,
+        "posted_at": timestamp,
+        "text": text,
+        "user": self_domain
+    }))
+
     # need the uuid for later
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, text) 
-VALUES (
-    %s,
-    true,
-    %s,
-    %s,
-    %s
-);
-""", (uuid, parent_post_id, parent_comment_id, text))
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature) 
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+""", (uuid, True, parent_post_id, parent_comment_id, self_domain, text, from_timestamp(timestamp), signature))
 
     # now need to share the comment with other instances
     # first, figure out which instances to share to
@@ -124,19 +154,26 @@ SELECT * FROM comment_tree;""", (parent_post_id,))
     fails = []
 
     for instance in instances:
-        if not instance:
+        if instance == self_domain:
             continue
         success = False
         try:
             r = requests.post(f"{instance}/api/sharecomment/", 
-                json={"domain": "localhost:3000", "id": uuid})
+                json={
+                    "domain": self_domain,
+                    "comment": get_comment(uuid)[0]
+                })
+            print(r.text,r.status_code)
             if r.status_code == 200:
+                print("suc")
                 success = True
         except:
             pass
+        print(success)
         if not success:
             fails.append(instance)
 
+    print(fails)
     if fails:
         db.execute_many("""
 INSERT INTO failed_shares (user, comment_id) VALUES (%s, %s) 
@@ -144,31 +181,37 @@ INSERT INTO failed_shares (user, comment_id) VALUES (%s, %s)
 
     return {"success": True}, 200
 
-def share_comment(comment_id, domain):
+def share_comment(comment, domain):
     domain = fix_url(domain)
+    comment_id = comment["id"]
 
     result = db.query("SELECT * FROM comments WHERE id=%s", (comment_id,))
     if len(result) != 0:
         return {"error": "post already exists"}, 400
     
-    url = f"{domain}/api/comments/{comment_id}"
-
-    data = requests.get(url)
-
-    if not data:
-        return {"error": f"{url} returned {data.status_code}"}, data.status_code
-    
-    comment = data.json()
     parent = comment["parent"]
     error, parent_post_id, parent_comment_id = get_parent(parent)
     
     if error:
         return {"error": "parent not found"}, 400
 
+    signature = crypto.signature_from_string(comment["signature"])
+    pubkey = get_pubkey_of_instance(domain)
+
+    if not crypto.verify_signature(crypto.stringify_comment({
+        "id": comment["id"],
+        "parent_post_id": parent_post_id,
+        "parent_comment_id": parent_comment_id,
+        "posted_at": comment["posted_at"],
+        "text": comment["text"],
+        "user": comment["user"]
+    }), signature, pubkey):
+        return {"error": f"couldnt verify signature"}, 400
+
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at)
-VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-(comment["id"], False, parent_post_id, parent_comment_id, domain, comment["text"], datetime.fromtimestamp(comment["posted_at"], tz=timezone.utc)))
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+(comment["id"], False, parent_post_id, parent_comment_id, domain, comment["text"], from_timestamp(comment["posted_at"]), signature))
 
     return {"success": True}, 200
 
@@ -176,9 +219,10 @@ def format_post(sql_post):
     return {
         "id": sql_post["id"],
         "is_self": bool(sql_post["is_self"]),
-        "posted_at": int(sql_post["posted_at"].replace(tzinfo=timezone.utc).timestamp()),
+        "posted_at": to_timestamp(sql_post["posted_at"]),
         "text": sql_post["text"],
         "user": sql_post["user"],
+        "signature": crypto.signature_to_string(sql_post["signature"])
     }
 
 def format_comment(sql_comment):
@@ -196,10 +240,26 @@ def format_comment(sql_comment):
             "id": parent_id,
             "type": parent_type
         },
-        "posted_at": int(sql_comment["posted_at"].replace(tzinfo=timezone.utc).timestamp()),
+        "posted_at": to_timestamp(sql_comment["posted_at"]),
         "text": sql_comment["text"],
         "user": sql_comment["user"],
+        "signature": crypto.signature_to_string(sql_comment["signature"])
     }
+
+def get_pubkey_of_instance(domain):
+    result = db.query("SELECT * FROM users WHERE domain=%s;", (domain,))
+
+    if len(result) == 1:
+        return crypto.public_key_from_string(result[0]["public_key"])
+    
+    r = requests.get(f"{domain}/api")
+    key_string = r.json()["public_key"]
+
+    # TODO if instance already exists
+    db.execute("INSERT INTO users (domain, public_key) VALUES (%s, %s)",
+               (domain, key_string))
+    
+    return crypto.public_key_from_string(key_string)
 
 def get_parent(parent):
     parent_id = parent["id"]
@@ -232,3 +292,15 @@ def fix_url(given_domain):
     if parsed_url.port:
         domain+=":"+str(parsed_url.port)
     return domain
+
+def to_timestamp(datetime):
+    return int(datetime.replace(tzinfo=timezone.utc).timestamp())
+
+def from_timestamp(timestamp):
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+def generate_id():
+    generated_uuid = uuid.uuid4()
+    return str(generated_uuid)
+
+self_domain = fix_url(os.getenv("DOMAIN"))
