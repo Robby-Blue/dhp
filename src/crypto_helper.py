@@ -77,12 +77,6 @@ def signature_from_string(signature_string):
     return urlsafe_b64decode(signature_string)
 
 def stringify_post(post):
-    print("\n---\n".join([
-        post["id"],
-        str(post["posted_at"]),
-        post["text"].replace("-", "\\-"), 
-        post["user"]
-    ]))
     return "\n---\n".join([
         post["id"],
         str(post["posted_at"]),
@@ -91,15 +85,6 @@ def stringify_post(post):
     ])
 
 def stringify_comment(comment):
-    print(comment)
-    print("\n---\n".join([
-        comment["id"],
-        str(comment["parent_post_id"]),
-        str(comment["parent_comment_id"]),
-        str(comment["posted_at"]),
-        comment["text"].replace("-", "\\-"),
-        comment["user"]
-    ]))
     return "\n---\n".join([
         comment["id"],
         str(comment["parent_post_id"]),

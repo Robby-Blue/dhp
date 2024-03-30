@@ -1,5 +1,6 @@
 import os
 import requests
+import time
 import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -148,36 +149,14 @@ SELECT * FROM comment_tree;""", (parent_post_id,))
     
     for row in result:
         user = row["user"]
+        if user == self_domain:
+            continue
         if user not in instances:
             instances.append(user)
 
-    fails = []
-
-    for instance in instances:
-        if instance == self_domain:
-            continue
-        success = False
-        try:
-            r = requests.post(f"{instance}/api/sharecomment/", 
-                json={
-                    "domain": self_domain,
-                    "comment": get_comment(uuid)[0]
-                })
-            print(r.text,r.status_code)
-            if r.status_code == 200:
-                print("suc")
-                success = True
-        except:
-            pass
-        print(success)
-        if not success:
-            fails.append(instance)
-
-    print(fails)
-    if fails:
-        db.execute_many("""
-INSERT INTO failed_shares (user, comment_id) VALUES (%s, %s) 
-""", [(instance, uuid) for instance in fails])
+    db.execute_many("""
+INSERT INTO share_queue (domain, comment_id) VALUES (%s, %s) 
+""", [(instance, uuid) for instance in instances])
 
     return {"success": True}, 200
 
@@ -187,13 +166,13 @@ def share_comment(comment, domain):
 
     result = db.query("SELECT * FROM comments WHERE id=%s", (comment_id,))
     if len(result) != 0:
-        return {"error": "post already exists"}, 400
+        return {"error": "already exists"}, 400
     
     parent = comment["parent"]
     error, parent_post_id, parent_comment_id = get_parent(parent)
     
     if error:
-        return {"error": "parent not found"}, 400
+        return {"error": "unknown dependent id"}, 404
 
     signature = crypto.signature_from_string(comment["signature"])
     pubkey = get_pubkey_of_instance(domain)
@@ -292,6 +271,41 @@ def fix_url(given_domain):
     if parsed_url.port:
         domain+=":"+str(parsed_url.port)
     return domain
+
+def process_share_queue():
+    while True:
+        tasks = db.query("SELECT * FROM share_queue;")
+        for task in tasks:
+            should_delete = process_task(task)
+            if should_delete:
+                db.execute("DELETE FROM share_queue WHERE id=%s",
+                    (task["id"],))
+
+        time.sleep(10)
+
+def process_task(task):
+    if task["comment_id"]:
+        return process_share_comment_task(task)
+    return False # idk what to do
+
+def process_share_comment_task(task):
+    instance = task["domain"]
+    uuid = task["comment_id"]
+
+    try:
+        r = requests.post(f"{instance}/api/sharecomment/", 
+            json={
+                "domain": self_domain,
+                "comment": get_comment(uuid)[0]
+            })
+        if r.status_code == 200:
+            return True
+        
+        # stop resending comments it already knows about
+        if r.json()["error"] == "already exists":
+            return True
+    except:
+        return False
 
 def to_timestamp(datetime):
     return int(datetime.replace(tzinfo=timezone.utc).timestamp())

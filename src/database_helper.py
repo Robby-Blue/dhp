@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS users (
     public_key TEXT NOT NULL
 );
 """)
+        
+        self.execute("""
+CREATE TABLE IF NOT EXISTS share_queue (
+    id INT auto_increment,
+    domain TEXT,
+    comment_id CHAR(36),
+    PRIMARY KEY (id),
+    FOREIGN KEY (comment_id) REFERENCES comments(id)
+);
+""")
 
     def query(self, statement, values=()):
         self.cursor.execute(statement, values)
@@ -58,5 +68,5 @@ CREATE TABLE IF NOT EXISTS users (
         self.connection.commit()
 
     def execute_many(self, statement, values=[()]):
-        self.cursor.execute(statement, values)
+        self.cursor.executemany(statement, values)
         self.connection.commit()
