@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS comments (
     text TEXT NOT NULL,
     posted_at TIMESTAMP NOT NULL,
     signature BLOB NOT NULL,
-    signature_verified BOOLEAN DEFAULT true,
+    signature_verified BOOLEAN DEFAULT false,
     PRIMARY KEY (id),
     FOREIGN KEY (parent_post_id) REFERENCES posts(id),
     FOREIGN KEY (parent_comment_id) REFERENCES comments(id)
@@ -50,9 +50,10 @@ CREATE TABLE IF NOT EXISTS users (
 """)
         
         self.execute("""
-CREATE TABLE IF NOT EXISTS share_queue (
+CREATE TABLE IF NOT EXISTS task_queue (
     id INT auto_increment,
     domain TEXT,
+    type VARCHAR(25),
     comment_id CHAR(36),
     PRIMARY KEY (id),
     FOREIGN KEY (comment_id) REFERENCES comments(id)

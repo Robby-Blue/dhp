@@ -62,7 +62,7 @@ def sharecomment():
     return jsonify(res), status_code
 
 if __name__ == '__main__':
-    t=Thread(target=backend.process_share_queue)
+    t=Thread(target=backend.process_task_queue)
     t.daemon = True
     t.start()
     app.run(host=os.getenv("HOST"), port=os.getenv("PORT"))

@@ -54,6 +54,9 @@ def get_post(post_id):
 
     pubkey = get_pubkey_of_instance(domain)
 
+    if not pubkey:
+        return {"error": f"cant get pubkey"}, 404
+
     if not crypto.verify_signature(crypto.stringify_post({
         "id": post["id"],
         "posted_at": post["posted_at"],
@@ -155,8 +158,8 @@ SELECT * FROM comment_tree;""", (parent_post_id,))
             instances.append(user)
 
     db.execute_many("""
-INSERT INTO share_queue (domain, comment_id) VALUES (%s, %s) 
-""", [(instance, uuid) for instance in instances])
+INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
+""", [("share_comment", instance, uuid) for instance in instances])
 
     return {"success": True}, 200
 
@@ -175,22 +178,14 @@ def share_comment(comment, domain):
         return {"error": "unknown dependent id"}, 404
 
     signature = crypto.signature_from_string(comment["signature"])
-    pubkey = get_pubkey_of_instance(domain)
-
-    if not crypto.verify_signature(crypto.stringify_comment({
-        "id": comment["id"],
-        "parent_post_id": parent_post_id,
-        "parent_comment_id": parent_comment_id,
-        "posted_at": comment["posted_at"],
-        "text": comment["text"],
-        "user": comment["user"]
-    }), signature, pubkey):
-        return {"error": f"couldnt verify signature"}, 400
-
     db.execute("""
 INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-(comment["id"], False, parent_post_id, parent_comment_id, domain, comment["text"], from_timestamp(comment["posted_at"]), signature))
+(comment_id, False, parent_post_id, parent_comment_id, domain, comment["text"], from_timestamp(comment["posted_at"]), signature))
+
+    db.execute("""
+INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
+""", ("verify_comment",domain, comment_id))
 
     return {"success": True}, 200
 
@@ -226,19 +221,21 @@ def format_comment(sql_comment):
     }
 
 def get_pubkey_of_instance(domain):
-    result = db.query("SELECT * FROM users WHERE domain=%s;", (domain,))
+    try:
+        result = db.query("SELECT * FROM users WHERE domain=%s;", (domain,))
 
-    if len(result) == 1:
-        return crypto.public_key_from_string(result[0]["public_key"])
-    
-    r = requests.get(f"{domain}/api")
-    key_string = r.json()["public_key"]
+        if len(result) == 1:
+            return crypto.public_key_from_string(result[0]["public_key"])
+        
+        r = requests.get(f"{domain}/api")
+        key_string = r.json()["public_key"]
 
-    # TODO if instance already exists
-    db.execute("INSERT INTO users (domain, public_key) VALUES (%s, %s)",
-               (domain, key_string))
-    
-    return crypto.public_key_from_string(key_string)
+        db.execute("INSERT INTO users (domain, public_key) VALUES (%s, %s)",
+                (domain, key_string))
+        
+        return crypto.public_key_from_string(key_string)
+    except:
+        return None
 
 def get_parent(parent):
     parent_id = parent["id"]
@@ -272,20 +269,23 @@ def fix_url(given_domain):
         domain+=":"+str(parsed_url.port)
     return domain
 
-def process_share_queue():
+def process_task_queue():
     while True:
-        tasks = db.query("SELECT * FROM share_queue;")
+        tasks = db.query("SELECT * FROM task_queue;")
         for task in tasks:
             should_delete = process_task(task)
             if should_delete:
-                db.execute("DELETE FROM share_queue WHERE id=%s",
+                db.execute("DELETE FROM task_queue WHERE id=%s",
                     (task["id"],))
 
-        time.sleep(10)
+        time.sleep(600)
 
 def process_task(task):
-    if task["comment_id"]:
+    task_type = task["type"]
+    if task_type == "share_comment":
         return process_share_comment_task(task)
+    if task_type == "verify_comment":
+        return process_verify_comment_task(task)
     return False # idk what to do
 
 def process_share_comment_task(task):
@@ -306,6 +306,35 @@ def process_share_comment_task(task):
             return True
     except:
         return False
+    
+def process_verify_comment_task(task):
+    result = db.query("SELECT * FROM comments WHERE id=%s",
+        (task["comment_id"],))
+    comment = result[0]
+
+    signature = comment["signature"]
+    pubkey = get_pubkey_of_instance(comment["user"])
+
+    if not pubkey:
+        return False
+
+    verified = crypto.verify_signature(crypto.stringify_comment({
+        "id": comment["id"],
+        "parent_post_id": comment["parent_post_id"],
+        "parent_comment_id": comment["parent_comment_id"],
+        "posted_at": to_timestamp(comment["posted_at"]),
+        "text": comment["text"],
+        "user": comment["user"]
+    }), signature, pubkey)
+
+    if verified:
+        db.execute("""
+UPDATE comments SET signature_verified=1 WHERE id=%s;
+""", (comment["id"],))
+
+    # either its verified and done
+    # or its unverifieable, no need to retry later
+    return True
 
 def to_timestamp(datetime):
     return int(datetime.replace(tzinfo=timezone.utc).timestamp())
