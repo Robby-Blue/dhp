@@ -27,7 +27,7 @@ else:
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption()
     )
-    with open(key_file, 'wb') as f:
+    with open(key_file, "wb") as f:
         f.write(pem)
 
 public_key = private_key.public_key()
@@ -63,7 +63,7 @@ def get_public_pem():
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
-    return pem.decode('UTF-8')
+    return pem.decode("UTF-8")
 
 def public_key_from_string(string):
     return serialization.load_pem_public_key(
@@ -71,7 +71,7 @@ def public_key_from_string(string):
     )
 
 def signature_to_string(signature):
-    return urlsafe_b64encode(signature).decode('UTF-8')
+    return urlsafe_b64encode(signature).decode("UTF-8")
 
 def signature_from_string(signature_string):
     return urlsafe_b64decode(signature_string)
@@ -85,10 +85,15 @@ def stringify_post(post):
     ])
 
 def stringify_comment(comment):
+    parent_post_signature = comment["parent_post_signature"]
+    parent_comment_signature = comment["parent_comment_signature"]
+
     return "\n---\n".join([
         comment["id"],
         str(comment["parent_post_id"]),
         str(comment["parent_comment_id"]),
+        signature_to_string(parent_post_signature),
+        signature_to_string(parent_comment_signature) if parent_comment_signature else str(None),
         str(comment["posted_at"]),
         comment["text"].replace("-", "\\-"),
         comment["user"]

@@ -103,10 +103,12 @@ def get_comment(comment_id):
     return format_comment(comment), 200
 
 def create_comment(text, parent):
-    error, parent_post_id, parent_comment_id = get_parent(parent)
+    error, parent_post, parent_comment = get_parent(parent)
     
     if error:
         return {"error": error}, 400
+    
+    parent_comment_id = parent_comment.get("id", None)
 
     # write comment to db
     uuid = generate_id()
@@ -114,8 +116,10 @@ def create_comment(text, parent):
 
     signature = crypto.sign_string(crypto.stringify_comment({
         "id": uuid,
-        "parent_post_id": parent_post_id,
-        "parent_comment_id": parent_comment_id,
+        "parent_post_id": parent_post["id"],
+        "parent_comment_id": parent_comment_id if parent_comment else None,
+        "parent_post_signature": parent_post["signature"],
+        "parent_comment_signature": parent_comment["signature"] if parent_comment else None,
         "posted_at": timestamp,
         "text": text,
         "user": self_domain
@@ -125,12 +129,12 @@ def create_comment(text, parent):
     db.execute("""
 INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature) 
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-""", (uuid, True, parent_post_id, parent_comment_id, self_domain, text, from_timestamp(timestamp), signature))
+""", (uuid, True, parent_post["id"], parent_comment_id, self_domain, text, from_timestamp(timestamp), signature))
 
     # now need to share the comment with other instances
     # first, figure out which instances to share to
     # instance of post and all comments
-    post, _ = get_post(parent_post_id)
+    post, _ = get_post(parent_post["id"])
     instances = [post["user"]]
 
     result = db.query("""
@@ -148,7 +152,7 @@ WITH RECURSIVE comment_tree AS (
     INNER JOIN
         comment_tree ct ON c.parent_comment_id = ct.id
 )
-SELECT * FROM comment_tree;""", (parent_post_id,))
+SELECT * FROM comment_tree;""", (parent_post["id"],))
     
     for row in result:
         user = row["user"]
@@ -172,16 +176,19 @@ def share_comment(comment, domain):
         return {"error": "already exists"}, 400
     
     parent = comment["parent"]
-    error, parent_post_id, parent_comment_id = get_parent(parent)
+    error, parent_post, parent_comment = get_parent(parent)
     
+    parent_comment_id = parent_comment["id"] if parent_comment else None
+
     if error:
         return {"error": "unknown dependent id"}, 404
 
     signature = crypto.signature_from_string(comment["signature"])
+
     db.execute("""
 INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-(comment_id, False, parent_post_id, parent_comment_id, domain, comment["text"], from_timestamp(comment["posted_at"]), signature))
+(comment_id, False, parent_post["id"], parent_comment_id, domain, comment["text"], from_timestamp(comment["posted_at"]), signature))
 
     db.execute("""
 INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
@@ -241,23 +248,24 @@ def get_parent(parent):
     parent_id = parent["id"]
     parent_type = parent["type"]
 
-    parent_post_id = None
-    parent_comment_id = None
+    parent_post = None
+    parent_comment = None
 
     if parent_type == "post":
         result = db.query("SELECT * FROM posts WHERE id=%s", (parent_id,))
         if len(result) == 0:
             return "parent not found", None, None
-        parent_post_id = parent_id
+        parent_post = result[0]
     elif parent_type == "comment":
         result = db.query("SELECT * FROM comments WHERE id=%s", (parent_id,))
         if len(result) == 0:
             return "parent not found", None, None
-        parent_comment_id = parent_id
-        parent_post_id = result["parent_post_id"]
+        parent_comment = result[0]
+        result = db.query("SELECT * FROM posts WHERE id=%s", (parent_comment["parent_post_id"],))
+        parent_post = result[0]
     else:
         return "invalid parent type", None, None
-    return False, parent_post_id, parent_comment_id
+    return False, parent_post, parent_comment
 
 def fix_url(given_domain):
     if not given_domain.startswith("http"):
@@ -278,7 +286,7 @@ def process_task_queue():
                 db.execute("DELETE FROM task_queue WHERE id=%s",
                     (task["id"],))
 
-        time.sleep(600)
+        time.sleep(6)
 
 def process_task(task):
     task_type = task["type"]
@@ -308,7 +316,17 @@ def process_share_comment_task(task):
         return False
     
 def process_verify_comment_task(task):
-    result = db.query("SELECT * FROM comments WHERE id=%s",
+    result = db.query("""
+SELECT
+    comments.*, parent_post.signature AS parent_post_signature, parent_comment.signature AS parent_comment_signature
+FROM
+    comments
+LEFT JOIN
+    posts AS parent_post ON parent_post.id=comments.parent_post_id
+LEFT JOIN
+    comments as parent_comment on parent_comment.id=comments.parent_comment_id
+WHERE
+    comments.id=%s;""",
         (task["comment_id"],))
     comment = result[0]
 
@@ -322,6 +340,8 @@ def process_verify_comment_task(task):
         "id": comment["id"],
         "parent_post_id": comment["parent_post_id"],
         "parent_comment_id": comment["parent_comment_id"],
+        "parent_post_signature": comment["parent_post_signature"],
+        "parent_comment_signature": comment["parent_comment_signature"],
         "posted_at": to_timestamp(comment["posted_at"]),
         "text": comment["text"],
         "user": comment["user"]
