@@ -1,7 +1,7 @@
 from threading import Thread
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 # setup
 load_dotenv(".env")
@@ -10,6 +10,14 @@ import backend
 
 # web server
 app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return send_from_directory('static', 'index.html')
+
+@app.route("/posts/<post_id>")
+def post(post_id):
+    return send_from_directory('static', 'posts/posts.html')
 
 @app.route("/api/")
 def api_index():
