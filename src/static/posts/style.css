@@ -2,10 +2,14 @@ html {
     background-color: rgb(41, 41, 41);
 }
 
+#content {
+    margin: auto;
+    width: 50%;
+}
+
 .submission {
     background-color: rgb(83, 83, 83);
     padding: 10px;
-    width: 50%;
     border-radius: 8px;
 }
 

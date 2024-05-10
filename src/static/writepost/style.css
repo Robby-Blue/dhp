@@ -1,0 +1,33 @@
+html {
+    background-color: rgb(41, 41, 41);
+}
+
+.html, body {
+    height: 100vh;
+    /* force it to be full height 
+       to make the height in text-content work*/
+}
+
+#content {
+  margin: auto;
+  width: 25%;
+  height: 50%;
+}
+
+#text-content {
+    height: 50%;
+    width: 100%;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    padding: 8px;
+    margin-top: 20%;
+    margin-bottom: 16px;
+    resize: none;
+}
+
+#send-post-button {
+    border-radius: 8px;
+    border: none;
+    padding: 8px 12px;
+}

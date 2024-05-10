@@ -15,8 +15,12 @@ app = Flask(__name__)
 def index():
     return send_from_directory('static', 'index.html')
 
-@app.route("/posts/<post_id>")
-def post(post_id):
+@app.route("/writepost/")
+def writepost():
+    return send_from_directory('static', 'writepost/writepost.html')
+
+@app.route("/posts/<_>")
+def post(_):
     return send_from_directory('static', 'posts/posts.html')
 
 @app.route("/api/")
@@ -24,34 +28,34 @@ def api_index():
     return jsonify(backend.get_index())
 
 @app.route("/api/posts/")
-def get_posts():
+def api_get_posts():
     return jsonify(backend.get_posts())
 
 @app.route("/api/posts/<post_id>")
-def get_post(post_id):
+def api_get_post(post_id):
     res, status_code = backend.get_post(post_id)
     return jsonify(res), status_code
 
 @app.route("/api/createpost/", methods=["POST"])
-def createpost():
+def api_createpost():
     json_data = request.json
     text = json_data["text"]
 
-    backend.create_post(text)
+    res, status_code = backend.create_post(text)
 
-    return "posted"
+    return jsonify(res), status_code
 
 @app.route("/api/comments/")
-def get_comments():
+def api_get_comments():
     return jsonify(backend.get_comments())
 
 @app.route("/api/comments/<comment_id>")
-def get_comment(comment_id):
+def api_get_comment(comment_id):
     res, status_code = backend.get_comment(comment_id)
     return jsonify(res), status_code
 
 @app.route("/api/createcomment/", methods=["POST"])
-def createcomment():
+def api_createcomment():
     json_data = request.json
     text = json_data["text"]
     parent = json_data["parent"]
@@ -61,7 +65,7 @@ def createcomment():
     return {"success": True}, 200
 
 @app.route("/api/sharecomment/", methods=["POST"])
-def sharecomment():
+def api_sharecomment():
     json_data = request.json
     comment = json_data["comment"]
     domain = json_data["domain"]

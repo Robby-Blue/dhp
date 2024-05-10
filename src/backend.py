@@ -164,6 +164,8 @@ def create_post(text):
 INSERT INTO posts (id, is_self, user, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s);
 """, (uuid, True, self_domain, text, from_timestamp(timestamp), signature))
+    
+    return {"id": uuid}, 200
 
 def get_comments():
     result = db.query("SELECT * FROM comments")
