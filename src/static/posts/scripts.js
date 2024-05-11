@@ -29,8 +29,9 @@ function createCommentsLookup(comments){
     return commentsLookup
 }
 
-function createPostDiv(data, parent){
-    const post = newElement("div", {"class": "submission"})
+function createPostDiv(data, parent, isPost){
+    const className = isPost ? "submission post" : "submission" 
+    const post = newElement("div", {"class": className})
     parent.appendChild(post)
 
     const authorElement = newElement("p", {"class": "author"})
@@ -41,9 +42,20 @@ function createPostDiv(data, parent){
     textElement.innerText = data.text
     post.appendChild(textElement)
 
+    const bottomBarElement = newElement("div", {"class": "bottom-bar"})
+    post.appendChild(bottomBarElement)
+
     const dateElement = newElement("p", {"class": "date"})
     dateElement.innerText = formatTimestamp(data.posted_at)
-    post.appendChild(dateElement)
+    bottomBarElement.appendChild(dateElement)
+
+    const replyButtonLink = newElement("a", {})
+    replyButtonLink.href = `/writereply/?user=${data.user}&isPost=${isPost}&id=${data.id}`
+    bottomBarElement.appendChild(replyButtonLink)
+
+    const replyButton = newElement("button", {"class": "reply-button"})
+    replyButton.innerText = "Reply"
+    replyButtonLink.appendChild(replyButton)
 }
 
 function createReplyDivs(commentsLookup, parentId, parentElement){
@@ -54,8 +66,7 @@ function createReplyDivs(commentsLookup, parentId, parentElement){
         return
 
     for(const comment of commentsLookup[parentId]){
-        console.log(comment)
-        createPostDiv(comment, repliesElement)
+        createPostDiv(comment, repliesElement, false)
         createReplyDivs(commentsLookup, comment.id, repliesElement)
     }
 }
@@ -68,7 +79,7 @@ fetch(`/api/posts/${id}`)
   .then(data => {
     const parent = document.getElementById("content")
 
-    createPostDiv(data, parent)
+    createPostDiv(data, parent, true)
 
     const commentsLookup = createCommentsLookup(data.comments)
 

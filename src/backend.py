@@ -23,8 +23,10 @@ def get_posts():
     result = db.query("SELECT * FROM posts WHERE is_self=true")
     return [format_post(post) for post in result]
 
-def get_post(post_id):
-    local_search = "@" not in post_id
+def get_post(post_id, load_comments=True):
+    post_id, user = parse_id(post_id)
+
+    local_search = not bool(user)
     if local_search:
         result = db.query("SELECT * FROM posts WHERE id=%s", (post_id,))
 
@@ -32,18 +34,14 @@ def get_post(post_id):
             return {"error": "post not found"}, 404
         post = format_post(result[0])
 
-        comments_result = db.query("""
+        if load_comments:
+            comments_result = db.query("""
 SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-
-        post["comments"] = [format_comment(comment) for comment in comments_result]
+            post["comments"] = [format_comment(comment) for comment in comments_result]
         return post, 200
     
-    id_segments = post_id.split("@")
-    post_id = id_segments[0]
-
-    # global search and no post found, continue
-    post_id = id_segments[0]
-    domain = fix_url(id_segments[1])
+    # local search and no post found, continue
+    domain = fix_url(user)
     url = f"{domain}/api/posts/{post_id}"
 
     data = requests.get(url)
@@ -61,23 +59,26 @@ SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
         if not verify_result["verified"]:
             return verify_result["res"]
     
-    # try to find known comments locally
-    comments_result = db.query("""
+    if not load_comments:
+        post.pop("comments")
+    else:
+        # try to find known comments locally
+        comments_result = db.query("""
 SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-    comments = {}
-    for comment in comments_result:
-        comments[comment["id"]] = format_comment(comment)
-    
-    for i, comment in enumerate(post["comments"]):
-        if comment["id"] in comments:
-            post["comments"][i] = comments.pop(comment["id"])
-            # remove comment from `comments` such that all remaining elements
-            # will be comments which the other instance doesnt know about
-            continue
-        comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
+        comments = {}
+        for comment in comments_result:
+            comments[comment["id"]] = format_comment(comment)
+        
+        for i, comment in enumerate(post["comments"]):
+            if comment["id"] in comments:
+                post["comments"][i] = comments.pop(comment["id"])
+                # remove comment from `comments` such that all remaining elements
+                # will be comments which the other instance doesnt know about
+                continue
+            comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
 
-    for comment in comments.values():
-        post["comments"].append(comment)
+        for comment in comments.values():
+            post["comments"].append(comment)
 
     return post, 200
 
@@ -172,7 +173,12 @@ def get_comments():
     return [format_comment(comment) for comment in result]
 
 def get_comment(comment_id):
-    result = db.query("SELECT * FROM comments WHERE id=%s", (comment_id,))
+    comment_id, user = parse_id(comment_id)
+
+    if user:
+        result = db.query("SELECT * FROM comments WHERE id=%s AND user=%s", (comment_id, user))
+    else:
+        result = db.query("SELECT * FROM comments WHERE id=%s AND is_self=true", (comment_id,))
 
     if len(result) == 0:
         return {"error": "comment not found"}, 404
@@ -218,7 +224,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
-    return {"success": True}, 200
+    return {"parent_post_id": post["id"]}, 200
 
 def share_comment(comment, domain):
     domain = fix_url(domain)
@@ -391,6 +397,17 @@ UPDATE comments SET signature_verified=1 WHERE id=%s;
     # either its verified and done
     # or its unverifieable, no need to retry later
     return {"task_done": True, "verified": verified}
+
+def parse_id(id):
+    if "@" in id:
+        segments = id.split("@")
+        id = segments[0]
+        user = fix_url(segments[1])
+        if user == self_domain:
+            user = None
+        return (id, user)
+    else:
+        return (id, None)
 
 def to_timestamp(datetime):
     return int(datetime.replace(tzinfo=timezone.utc).timestamp())
