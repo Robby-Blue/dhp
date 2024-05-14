@@ -1,0 +1,1 @@
+from frontend.snippets.post import generate as post

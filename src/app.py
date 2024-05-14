@@ -1,7 +1,9 @@
 from threading import Thread
 import os
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, redirect
+
+from frontend import sites
 
 # setup
 load_dotenv(".env")
@@ -12,21 +14,57 @@ import backend
 app = Flask(__name__)
 
 # front end
-@app.route("/")
-def index():
-    return send_from_directory('static', 'index.html')
+@app.route("/posts/<path:post_id>/")
+def post(post_id):
+    data, err = backend.get_post(post_id)
+    return sites.get_post_site(data, err)
 
-@app.route("/posts/<path:_>")
-def post(_):
-    return send_from_directory('static', 'posts/posts.html')
-
-@app.route("/writepost/")
+@app.route("/writepost/", methods=['GET'])
 def writepost():
-    return send_from_directory('static', 'writepost/writepost.html')
+    return sites.get_writepost_site()
 
-@app.route("/writereply/")
-def writereply():
-    return send_from_directory('static', 'writereply/writereply.html')
+@app.route("/writepost/", methods=['POST'])
+def writepost_post():
+    form = request.form
+    if not "text" in form:
+        return format_err({"error": "text not given", "code": 400}), 400
+    text = form["text"]
+
+    res, err = backend.create_post(text)
+    if err:
+        return format_err(err)
+    
+    id = res["id"]
+    return redirect(f"/posts/{id}")
+
+@app.route("/<path:id>/writereply/", methods=['GET'])
+def writereply(id):
+    data, err = backend.get_post_or_comment(id)
+    return sites.get_writereply_site(data, err)
+
+@app.route("/<path:id>/writereply/", methods=['POST'])
+def writereply_post(id):
+    form = request.form
+    if not "text" in form:
+        return format_err({"error": "text not given", "code": 400}), 400
+    
+    text = form["text"]
+
+    data, err = backend.get_post_or_comment(id)
+    if err:
+        return format_err(err)
+    
+    parent = {
+        "type": data["type"],
+        "id": data["submission"]["id"]
+    }
+
+    res, err = backend.create_comment(text, parent)
+    if err:
+        return format_err(err)
+    
+    id = res["parent_post_id"]
+    return redirect(f"/posts/{id}")
 
 # api
 @app.route("/api/")
@@ -62,33 +100,6 @@ def api_get_comment_preview(comment_id):
     res = backend.get_comment(comment_id)
     return format_res(res)
 
-def format_res(res):
-    data, err = res
-    if err:
-        status_code = err["code"]
-        err.pop("code")
-        return jsonify(err), status_code
-    return jsonify(data)
-
-@app.route("/api/createpost/", methods=["POST"])
-def api_createpost():
-    json_data = request.json
-    text = json_data["text"]
-
-    res, status_code = backend.create_post(text)
-
-    return jsonify(res), status_code
-
-@app.route("/api/createcomment/", methods=["POST"])
-def api_createcomment():
-    json_data = request.json
-    text = json_data["text"]
-    parent = json_data["parent"]
-
-    res, status_code = backend.create_comment(text, parent)
-
-    return jsonify(res), status_code
-
 @app.route("/api/sharecomment/", methods=["POST"])
 def api_sharecomment():
     json_data = request.json
@@ -97,6 +108,17 @@ def api_sharecomment():
     
     res, status_code = backend.share_comment(comment, domain)
     return jsonify(res), status_code
+
+def format_res(res):
+    data, err = res
+    if err:
+        status_code = err["code"]
+        return format_err(err), status_code
+    return jsonify(data)
+
+def format_err(err):
+    err.pop("code")
+    return jsonify(err)
 
 if __name__ == "__main__":
     t=Thread(target=backend.process_task_queue)

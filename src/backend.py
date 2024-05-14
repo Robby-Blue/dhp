@@ -23,14 +23,17 @@ def get_posts():
     result = db.query("SELECT * FROM posts WHERE is_self=true")
     return [format_post(post) for post in result], None
 
-def get_post(post_id, load_comments=True, allow_cached_global=False):
+def get_post(post_id, load_comments=True, allow_cached_global=False, force_cached=False):
     post_id, user = parse_id(post_id)
 
     local_search = not bool(user)
-    if local_search:
+    if local_search or allow_cached_global:
         post, error = get_post_from_db(post_id, allow_cached_global, load_comments)
         return post, error
     
+    if force_cached:
+        return None, {"error": f"post not found in cache"}
+
     # local search and no post found, continue
     domain = fix_url(user)
     url = f"{domain}/api/posts/{post_id}"
@@ -38,7 +41,7 @@ def get_post(post_id, load_comments=True, allow_cached_global=False):
     data = requests.get(url)
 
     if not data:
-        return None, {"error": f"{url} returned {data.status_code}"}, data.status_code
+        return None, {"error": f"{url} returned {data.status_code}"}
 
     # post found, need to verify signature
     post = data.json()
@@ -48,7 +51,8 @@ def get_post(post_id, load_comments=True, allow_cached_global=False):
     if len(result) == 0:
         verify_result = verify_and_add_post(post, domain)
         if not verify_result["verified"]:
-            return verify_result["res"]
+            res, err = verify_result["res"]
+            return res, err
     
     if not load_comments:
         post.pop("comments")
@@ -236,7 +240,8 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
-    return {"parent_post_id": post["id"]}, None
+    parent_id = build_id(post["id"], post["user"])
+    return {"parent_post_id": parent_id}, None
 
 def share_comment(comment, domain):
     domain = fix_url(domain)
@@ -248,6 +253,15 @@ def share_comment(comment, domain):
     err = verify_and_add_comment(comment, False)["res"]
 
     return None, err
+
+def get_post_or_comment(id):
+    post, err = get_post(id, False, True)
+    if post:
+        return {"type": "post", "submission": post}, err
+    comment, err = get_comment(id)
+    if comment:
+        return {"type": "comment", "submission": comment}, err
+    return None, {"error": "post or comment not found", "code": 404}
 
 def format_post(sql_post):
     return {
@@ -410,16 +424,21 @@ UPDATE comments SET signature_verified=1 WHERE id=%s;
     # or its unverifieable, no need to retry later
     return {"task_done": True, "verified": verified}
 
-def parse_id(id):
+def parse_id(id, return_self_domain=False):
     if "@" in id:
         segments = id.split("@")
         id = segments[0]
         user = fix_url(segments[1])
-        if user == self_domain:
+        if user == self_domain and not return_self_domain:
             user = None
         return (id, user)
     else:
         return (id, None)
+    
+def build_id(id, user):
+    if not user:
+        user = self_domain
+    return f"{id}@{user}"
 
 def to_timestamp(datetime):
     return int(datetime.replace(tzinfo=timezone.utc).timestamp())

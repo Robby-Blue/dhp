@@ -14,7 +14,7 @@ html {
   height: 50%;
 }
 
-#text-content {
+textarea {
     height: 50%;
     width: 100%;
     border-radius: 8px;
@@ -26,41 +26,8 @@ html {
     resize: none;
 }
 
-#send-post-button {
+input {
     border-radius: 8px;
     border: none;
     padding: 8px 12px;
-}
-
-
-.submission {
-    width: max-content;
-    background-color: rgb(83, 83, 83);
-    padding: 10px;
-    border-radius: 8px;
-}
-
-.post {
-    width: auto;
-}
-
-.submission p {
-    margin: 0;
-}
-
-.author, .text {
-    color: rgb(228, 228, 228);
-}
-
-.text {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-
-.author, .date {
-    font-size: 0.8rem;
-}
-
-.date {
-    color: rgb(189, 189, 189);
 }
