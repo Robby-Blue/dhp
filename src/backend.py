@@ -17,18 +17,18 @@ def get_index():
     return {
         "public_key": crypto.get_public_pem(),
         "domain": self_domain
-    }
+    }, None
 
 def get_posts():
     result = db.query("SELECT * FROM posts WHERE is_self=true")
-    return [format_post(post) for post in result]
+    return [format_post(post) for post in result], None
 
-def get_post(post_id, load_comments=True):
+def get_post(post_id, load_comments=True, allow_cached_global=False):
     post_id, user = parse_id(post_id)
 
     local_search = not bool(user)
     if local_search:
-        post, error = get_post_from_db(post_id, False, load_comments)
+        post, error = get_post_from_db(post_id, allow_cached_global, load_comments)
         return post, error
     
     # local search and no post found, continue
@@ -38,7 +38,7 @@ def get_post(post_id, load_comments=True):
     data = requests.get(url)
 
     if not data:
-        return {"error": f"{url} returned {data.status_code}"}, data.status_code
+        return None, {"error": f"{url} returned {data.status_code}"}, data.status_code
 
     # post found, need to verify signature
     post = data.json()
@@ -71,7 +71,7 @@ SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
         for comment in comments.values():
             post["comments"].append(comment)
 
-    return post, 200
+    return post, None
 
 def get_post_from_db(post_id, allow_global, load_comments):
     post_id, _ = parse_id(post_id)
@@ -102,7 +102,7 @@ def verify_and_add_post(post, domain):
     if not pubkey:
         return {
             "verified": False,
-            "res": ({"error": f"cant get pubkey"}, 404)
+            "res": (None, {"error": f"cant get pubkey", "code": 404})
         }
 
     if not crypto.verify_signature(crypto.stringify_post({
@@ -113,7 +113,7 @@ def verify_and_add_post(post, domain):
     }), signature, pubkey):
         return {
             "verified": False,
-            "res": ({"error": f"couldnt verify signature"}, 400)
+            "res": (None, {"error": f"couldnt verify signature", "code": 400})
         }
 
     post["is_self"] = False
@@ -124,19 +124,19 @@ VALUES (%s, %s, %s, %s, %s, %s)
     
     return {
         "verified": False,
-        "res": (post, 200)
+        "res": (post, None)
     }
 
 def verify_and_add_comment(comment, verify_now):
     parent = comment["parent"]
-    error, parent_post, parent_comment = get_parent(parent)
+    parent_post, parent_comment, error = get_parent(parent)
     
     parent_comment_id = parent_comment["id"] if parent_comment else None
 
     if error:
         return {
             "verified": False,
-            "res": ({"error": "unknown dependent id"}, 404)
+            "res": (None, {"error": "unknown dependent id", "code": 404})
         }
 
     signature = crypto.signature_from_string(comment["signature"])
@@ -159,7 +159,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
     
     return {
         "verified": verified,
-        "res": ({"success": True}, 200)
+        "res": ({"success": True}, None)
     }
 
 def create_post(text):
@@ -178,11 +178,11 @@ INSERT INTO posts (id, is_self, user, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s);
 """, (uuid, True, self_domain, text, from_timestamp(timestamp), signature))
     
-    return {"id": uuid}, 200
+    return {"id": uuid}, None
 
 def get_comments():
     result = db.query("SELECT * FROM comments")
-    return [format_comment(comment) for comment in result]
+    return [format_comment(comment) for comment in result], None
 
 def get_comment(comment_id):
     comment_id, user = parse_id(comment_id)
@@ -193,16 +193,16 @@ def get_comment(comment_id):
         result = db.query("SELECT * FROM comments WHERE id=%s AND is_self=true", (comment_id,))
 
     if len(result) == 0:
-        return {"error": "comment not found"}, 404
+        return None, {"error": "comment not found", "code": 404}
     
     comment = result[0]
-    return format_comment(comment), 200
+    return format_comment(comment), None
 
 def create_comment(text, parent):
-    error, parent_post, parent_comment = get_parent(parent)
+    parent_post, parent_comment, error = get_parent(parent)
     
     if error:
-        return {"error": error}, 400
+        return None, {"error": error, "code": 400}
     
     parent_comment_id = parent_comment["id"] if parent_comment else None
 
@@ -228,7 +228,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 """, (uuid, True, parent_post["id"], parent_comment_id, self_domain, text, from_timestamp(timestamp), signature, True))
 
     # share comment to post host
-    post, _ = get_post(parent_post["id"])
+    post, _ = get_post(parent_post["id"], allow_cached_global=True)
     instance = post["user"]
 
     if instance != self_domain:
@@ -236,18 +236,18 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
-    return {"parent_post_id": post["id"]}, 200
+    return {"parent_post_id": post["id"]}, None
 
 def share_comment(comment, domain):
     domain = fix_url(domain)
 
     result = db.query("SELECT * FROM comments WHERE id=%s", (comment["id"],))
     if len(result) != 0:
-        return {"error": "already exists"}, 400
+        return None, {"error": "already exists", "code": 400}
 
-    res, status_code = verify_and_add_comment(comment, False)["res"]
+    err = verify_and_add_comment(comment, False)["res"]
 
-    return res, status_code
+    return None, err
 
 def format_post(sql_post):
     return {
@@ -308,18 +308,18 @@ def get_parent(parent):
     if parent_type == "post":
         result = db.query("SELECT * FROM posts WHERE id=%s", (parent_id,))
         if len(result) == 0:
-            return "parent not found", None, None
+            return None, None, "parent not found"
         parent_post = result[0]
     elif parent_type == "comment":
         result = db.query("SELECT * FROM comments WHERE id=%s", (parent_id,))
         if len(result) == 0:
-            return "parent not found", None, None
+            return None, None, "parent not found"
         parent_comment = result[0]
         result = db.query("SELECT * FROM posts WHERE id=%s", (parent_comment["parent_post_id"],))
         parent_post = result[0]
     else:
-        return "invalid parent type", None, None
-    return False, parent_post, parent_comment
+        return None, None, "invalid parent type"
+    return parent_post, parent_comment, False
 
 def fix_url(given_domain):
     if not given_domain.startswith("http"):

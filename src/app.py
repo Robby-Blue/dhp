@@ -31,36 +31,44 @@ def writereply():
 # api
 @app.route("/api/")
 def api_index():
-    return jsonify(backend.get_index())
+    return format_res(backend.get_index())
 
 @app.route("/api/posts/")
 def api_get_posts():
-    return jsonify(backend.get_posts())
+    return format_res(backend.get_posts())
 
 @app.route("/api/posts/<path:post_id>")
 def api_get_post(post_id):
-    res, status_code = backend.get_post(post_id)
-    return jsonify(res), status_code
+    res = backend.get_post(post_id)
+    return format_res(res)
 
 @app.route("/api/comments/")
 def api_get_comments():
-    return jsonify(backend.get_comments())
+    return format_res(backend.get_comments())
 
 @app.route("/api/comments/<path:comment_id>")
 def api_get_comment(comment_id):
-    res, status_code = backend.get_comment(comment_id)
-    return jsonify(res), status_code
+    res = backend.get_comment(comment_id)
+    return format_res(res)
 
 @app.route("/api/preview/posts/<path:post_id>")
 def api_get_post_preview(post_id):
-    res, status_code = backend.get_post(post_id, False)
-    return jsonify(res), status_code
+    res = backend.get_post(post_id, False)
+    return format_res(res)
 
 @app.route("/api/preview/comments/<path:comment_id>")
 def api_get_comment_preview(comment_id):
     print(comment_id)
-    res, status_code = backend.get_comment(comment_id)
-    return jsonify(res), status_code
+    res = backend.get_comment(comment_id)
+    return format_res(res)
+
+def format_res(res):
+    data, err = res
+    if err:
+        status_code = err["code"]
+        err.pop("code")
+        return jsonify(err), status_code
+    return jsonify(data)
 
 @app.route("/api/createpost/", methods=["POST"])
 def api_createpost():
