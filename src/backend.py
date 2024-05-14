@@ -288,7 +288,7 @@ def get_pubkey_of_instance(domain):
         if len(result) == 1:
             return crypto.public_key_from_string(result[0]["public_key"])
         
-        r = requests.get(f"{domain}/api")
+        r = requests.get(f"{domain}/api/")
         key_string = r.json()["public_key"]
 
         db.execute("INSERT INTO users (domain, public_key) VALUES (%s, %s)",
