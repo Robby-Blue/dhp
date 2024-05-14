@@ -1,5 +1,6 @@
 import os
 
+from urllib.parse import urlparse
 from base64 import urlsafe_b64encode, urlsafe_b64decode
 
 from cryptography.exceptions import InvalidSignature
@@ -81,7 +82,7 @@ def stringify_post(post):
         post["id"],
         str(post["posted_at"]),
         post["text"].replace("-", "\\-"), 
-        post["user"]
+        remove_scheme_from_url(post["user"])
     ])
 
 def stringify_comment(comment):
@@ -96,5 +97,12 @@ def stringify_comment(comment):
         signature_to_string(parent_comment_signature) if parent_comment_signature else str(None),
         str(comment["posted_at"]),
         comment["text"].replace("-", "\\-"),
-        comment["user"]
+        remove_scheme_from_url(comment["user"])
     ])
+
+def remove_scheme_from_url(given_domain):
+    parsed_url = urlparse(given_domain)
+    domain = parsed_url.hostname
+    if parsed_url.port:
+        domain+=":"+str(parsed_url.port)
+    return domain
