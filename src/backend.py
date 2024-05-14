@@ -28,17 +28,8 @@ def get_post(post_id, load_comments=True):
 
     local_search = not bool(user)
     if local_search:
-        result = db.query("SELECT * FROM posts WHERE id=%s", (post_id,))
-
-        if len(result) == 0:
-            return {"error": "post not found"}, 404
-        post = format_post(result[0])
-
-        if load_comments:
-            comments_result = db.query("""
-SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-            post["comments"] = [format_comment(comment) for comment in comments_result]
-        return post, 200
+        post, error = get_post_from_db(post_id, False, load_comments)
+        return post, error
     
     # local search and no post found, continue
     domain = fix_url(user)
@@ -81,6 +72,27 @@ SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
             post["comments"].append(comment)
 
     return post, 200
+
+def get_post_from_db(post_id, allow_global, load_comments):
+    post_id, _ = parse_id(post_id)
+
+    if allow_global:
+        query = "SELECT * FROM posts WHERE id=%s"
+    else:
+        query = "SELECT * FROM posts WHERE id=%s AND is_self=true"
+
+    result = db.query(query, (post_id,))
+
+    if len(result) == 0:
+        return None, {"error": "post not found", "code": 404}
+    post = format_post(result[0])
+
+    if load_comments:
+        comments_result = db.query("""
+SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
+        post["comments"] = [format_comment(comment) for comment in comments_result]
+    
+    return post, None
 
 def verify_and_add_post(post, domain):
     signature = crypto.signature_from_string(post["signature"])
