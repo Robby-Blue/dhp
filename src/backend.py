@@ -250,9 +250,9 @@ def share_comment(comment, domain):
     if len(result) != 0:
         return None, {"error": "already exists", "code": 400}
 
-    err = verify_and_add_comment(comment, False)["res"]
+    res, err = verify_and_add_comment(comment, False)["res"]
 
-    return None, err
+    return res, err
 
 def get_post_or_comment(id):
     post, err = get_post(id, False, True)

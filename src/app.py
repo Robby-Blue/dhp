@@ -80,34 +80,14 @@ def api_get_post(post_id):
     res = backend.get_post(post_id)
     return format_res(res)
 
-@app.route("/api/comments/")
-def api_get_comments():
-    return format_res(backend.get_comments())
-
-@app.route("/api/comments/<path:comment_id>")
-def api_get_comment(comment_id):
-    res = backend.get_comment(comment_id)
-    return format_res(res)
-
-@app.route("/api/preview/posts/<path:post_id>")
-def api_get_post_preview(post_id):
-    res = backend.get_post(post_id, False)
-    return format_res(res)
-
-@app.route("/api/preview/comments/<path:comment_id>")
-def api_get_comment_preview(comment_id):
-    print(comment_id)
-    res = backend.get_comment(comment_id)
-    return format_res(res)
-
 @app.route("/api/sharecomment/", methods=["POST"])
 def api_sharecomment():
     json_data = request.json
     comment = json_data["comment"]
     domain = json_data["domain"]
     
-    res, status_code = backend.share_comment(comment, domain)
-    return jsonify(res), status_code
+    res = backend.share_comment(comment, domain)
+    return format_res(res)
 
 def format_res(res):
     data, err = res
