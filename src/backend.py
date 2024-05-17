@@ -23,59 +23,31 @@ def get_posts():
     result = db.query("SELECT * FROM posts WHERE is_self=true")
     return [format_post(post) for post in result], None
 
-def get_post(post_id, load_comments=True, allow_cached_global=False, force_cached=False):
+def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cached_global_as_fallback=True, allow_requests=True):
     post_id, user = parse_id(post_id)
 
     local_search = not bool(user)
-    if local_search or allow_cached_global:
-        post, error = get_post_from_db(post_id, allow_cached_global, load_comments)
-        return post, error
+    if local_search or use_cached_global:
+        post, error = get_post_from_db(post_id, use_cached_global, load_comments)
+        if post:
+            return post, error
     
-    if force_cached:
-        return None, {"error": f"post not found in cache"}
-
     # local search and no post found, continue
-    domain = fix_url(user)
-    url = f"{domain}/api/posts/{post_id}"
+    if allow_requests:
+        post, error = get_post_from_instance(user, post_id, load_comments=load_comments)
+        if post:
+            return post, error
+        # if the post (might) exist it we shouldnt error yet and 
+        # try to search for it locally again, the error could just
+        # be some http and internet magic
+        if error and not error["post_exists"]:
+            return post, error
 
-    data = requests.get(url)
-
-    if not data:
-        return None, {"error": f"{url} returned {data.status_code}"}
-
-    # post found, need to verify signature
-    post = data.json()
-    post["is_self"] = False
-    result = result = db.query("SELECT * FROM posts WHERE id=%s", (post["id"],))
-
-    if len(result) == 0:
-        verify_result = verify_and_add_post(post, domain)
-        if not verify_result["verified"]:
-            res, err = verify_result["res"]
-            return res, err
-    
-    if not load_comments:
-        post.pop("comments")
-    else:
-        # try to find known comments locally
-        comments_result = db.query("""
-SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-        comments = {}
-        for comment in comments_result:
-            comments[comment["id"]] = format_comment(comment)
-        
-        for i, comment in enumerate(post["comments"]):
-            if comment["id"] in comments:
-                post["comments"][i] = comments.pop(comment["id"])
-                # remove comment from `comments` such that all remaining elements
-                # will be comments which the other instance doesnt know about
-                continue
-            comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
-
-        for comment in comments.values():
-            post["comments"].append(comment)
-
-    return post, None
+    # local wasnt allowed before and global didnt work
+    if allow_cached_global_as_fallback:
+        post, error = get_post_from_db(post_id, True, load_comments)
+        return post, error
+    return None, {"error": "post not found", "code": 404}
 
 def get_post_from_db(post_id, allow_global, load_comments):
     post_id, _ = parse_id(post_id)
@@ -96,6 +68,58 @@ def get_post_from_db(post_id, allow_global, load_comments):
 SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
         post["comments"] = [format_comment(comment) for comment in comments_result]
     
+    return post, None
+
+def get_post_from_instance(user, post_id, *, load_comments=True):
+    post_id, _ = parse_id(post_id)
+    domain = fix_url(user)
+    url = f"{domain}/api/posts/{post_id}"
+    
+    try:
+        data = requests.get(url)
+
+        if not data:
+            post_exists = data.status_code != 404 
+            return None, {"error": f"{url} returned {data.status_code}", "post_exists": post_exists}
+
+        # post found, need to verify signature
+        post = data.json()
+    except:
+        # invalid json or bad request might be server error with an existing post
+        return None, {"error": f"http req to {url} didn't work", "post_exists": True}
+
+    post["is_self"] = False
+    result = result = db.query("SELECT * FROM posts WHERE id=%s", (post["id"],))
+
+    if len(result) == 0:
+        verify_result = verify_and_add_post(post, domain)
+        if not verify_result["verified"]:
+            res, err = verify_result["res"]
+            if err:
+                err["post_exists"] = False
+            return res, err
+        
+    if not load_comments:
+        post.pop("comments")
+    else:
+        # try to find known comments locally
+        comments_result = db.query("""
+SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
+        comments = {}
+        for comment in comments_result:
+            comments[comment["id"]] = format_comment(comment)
+
+        for i, comment in enumerate(post["comments"]):
+            if comment["id"] in comments:
+                post["comments"][i] = comments.pop(comment["id"])
+                # remove comment from `comments` such that all remaining elements
+                # will be comments which the other instance doesnt know about
+                continue
+            comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
+
+        for comment in comments.values():
+            post["comments"].append(comment)
+
     return post, None
 
 def verify_and_add_post(post, domain):
@@ -232,7 +256,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 """, (uuid, True, parent_post["id"], parent_comment_id, self_domain, text, from_timestamp(timestamp), signature, True))
 
     # share comment to post host
-    post, _ = get_post(parent_post["id"], allow_cached_global=True)
+    post, _ = get_post(parent_post["id"], use_cached_global=True)
     instance = post["user"]
 
     if instance != self_domain:
@@ -255,7 +279,7 @@ def share_comment(comment, domain):
     return res, err
 
 def get_post_or_comment(id):
-    post, err = get_post(id, False, True)
+    post, err = get_post(id, load_comments=False, use_cached_global=True)
     if post:
         return {"type": "post", "submission": post}, err
     comment, err = get_comment(id)
@@ -402,7 +426,7 @@ WHERE
     pubkey = get_pubkey_of_instance(comment["user"])
 
     if not pubkey:
-        return {"task_done": False, "verified": verified}
+        return {"task_done": False, "verified": False}
 
     verified = crypto.verify_signature(crypto.stringify_comment({
         "id": comment["id"],
