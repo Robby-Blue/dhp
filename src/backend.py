@@ -37,7 +37,7 @@ def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cach
             return post, error
     
     # local search and no post found, continue
-    if allow_requests:
+    if allow_requests and user:
         post, error = get_post_from_instance(user, post_id, load_comments=load_comments)
         if post:
             return post, error
