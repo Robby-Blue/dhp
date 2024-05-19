@@ -72,7 +72,7 @@ def get_post_from_db(post_id, allow_global, load_comments):
     if load_comments:
         comments_result = db.query("""
 SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-        post["comments"] = [format_comment(comment) for comment in comments_result]
+        post["comments"] = [format_comment(comment) for comment in comments_result if comment["signature_verified"]]
     
     return post, None
 
@@ -124,6 +124,8 @@ SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
             comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
 
         for comment in comments.values():
+            if not comment["signature_verified"]:
+                continue
             post["comments"].append(comment)
 
     return post, None
