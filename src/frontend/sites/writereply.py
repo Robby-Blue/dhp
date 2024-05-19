@@ -17,7 +17,7 @@ def get_writereply_site(data, err):
     id = submission["id"]
     user = submission["user"]
 
-    form_url = f"/{id}@{user}/writereply/"
+    form_url = f"/writereply/{id}@{user}/"
 
     return site(page_title="Write Reply", css=css_string, page_body=
         div({"id": "content"},

@@ -37,12 +37,12 @@ def writepost_post():
     id = res["id"]
     return redirect(f"/posts/{id}")
 
-@app.route("/<path:id>/writereply/", methods=['GET'])
+@app.route("/writereply/<path:id>/", methods=['GET'])
 def writereply(id):
     data, err = backend.get_post_or_comment(id)
     return sites.get_writereply_site(data, err)
 
-@app.route("/<path:id>/writereply/", methods=['POST'])
+@app.route("/writereply/<path:id>/", methods=['POST'])
 def writereply_post(id):
     form = request.form
     if not "text" in form:

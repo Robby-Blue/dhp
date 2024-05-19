@@ -10,7 +10,7 @@ def generate(data, /, is_post=True, has_bottom_bar=True):
     id = data["id"]
     text = data["text"]
 
-    href = f"/{id}@{user}/writereply/"
+    href = f"/writereply/{id}@{user}/"
     
     date_element = p(
         {"class": "date"},
