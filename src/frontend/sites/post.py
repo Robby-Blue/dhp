@@ -13,13 +13,23 @@ def get_post_site(data, err):
         return render_err(err)
     
     comments_lookup = create_comments_lookup(data["comments"])
+    is_cached = "is_cached" in data and data["is_cached"]
 
     return site(page_title="Post", css=css_string, page_body=
         div(
             {"id": "content"},
+            cached_warning(is_cached),
             post(data),
             create_replies(data["id"], comments_lookup)
         )
+    )
+
+def cached_warning(is_cached):
+    if not is_cached:
+        return None
+    return div(
+        {"class": "cache-warning"},
+        "This post is cached"
     )
 
 def create_replies(parent_id, comments_lookup):

@@ -7,6 +7,15 @@ html {
     width: 50%;
 }
 
+.cache-warning {
+    width: 100%;
+    background-color: orange;
+    text-align: center;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+}
+
 .submission {
     width: max-content;
     background-color: rgb(83, 83, 83);
@@ -15,7 +24,7 @@ html {
 }
 
 .post {
-    width: auto;
+    width: 100%;
 }
 
 .submission p {

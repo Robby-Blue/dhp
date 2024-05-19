@@ -30,6 +30,10 @@ def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cach
     if local_search or use_cached_global:
         post, error = get_post_from_db(post_id, use_cached_global, load_comments)
         if post:
+            # if use_cached_global but not if its a local search
+            # bc a local search is the newwest data of a local post
+            if not local_search:
+                post["is_cached"] = True
             return post, error
     
     # local search and no post found, continue
@@ -46,6 +50,8 @@ def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cach
     # local wasnt allowed before and global didnt work
     if allow_cached_global_as_fallback:
         post, error = get_post_from_db(post_id, True, load_comments)
+        if post:
+            post["is_cached"] = True
         return post, error
     return None, {"error": "post not found", "code": 404}
 
