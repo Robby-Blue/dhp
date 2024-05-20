@@ -1,0 +1,8 @@
+.warning {
+    width: 100%;
+    background-color: orange;
+    text-align: center;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+}

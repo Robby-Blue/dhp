@@ -1,12 +1,5 @@
-import os
 from frontend import *
 from frontend.snippets import post, warning
-
-script_dir = os.path.dirname(__file__)
-css_file_path = os.path.join(script_dir, "../css/posts.css")
-
-with open(css_file_path, "r") as css_file:
-    css_string = css_file.read()
 
 def get_post_site(data, err):
     if err:
@@ -15,9 +8,9 @@ def get_post_site(data, err):
     comments_lookup = create_comments_lookup(data["comments"])
     is_cached = "is_cached" in data and data["is_cached"]
 
-    return site(page_title="Post", css=css_string, page_body=
+    return render("Post",
         div(
-            {"id": "content"},
+            {"id": "content", "css": "posts.css"},
             warning(is_cached, "This post is cached"),
             post(data),
             create_replies(data["id"], comments_lookup)

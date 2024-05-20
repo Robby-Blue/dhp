@@ -35,7 +35,7 @@ def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
     
     submission_class = "submission post" if is_post else "submission"
 
-    return div({"class": submission_class},
+    return div({"class": submission_class, "css": "snippets/post.css"},
         p({"class": "author"}, user),
         p({"class": "text"}, text),
         bottom_bar

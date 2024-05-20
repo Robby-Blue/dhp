@@ -1,4 +1,7 @@
+import os
 from html import escape
+
+css_cache = {}
 
 class HtmlElement():
 
@@ -13,6 +16,18 @@ class HtmlElement():
         else:
             self.attributes = {}
             self.children = args
+
+        self.css = []
+        if "css" in self.attributes:
+            self.css = [self.attributes["css"]]
+            self.attributes.pop("css")
+
+        for child in self.children:
+            if not isinstance(child, HtmlElement):
+                continue
+            for css in child.css:
+                if css not in self.css:
+                    self.css.append(css)
 
     def __str__(self):
         attributes_str = ""
@@ -35,28 +50,49 @@ class HtmlElement():
         else:
             return f"<{self.tag}{attributes_str}>{inner_html}</{self.tag}>"
 
-def site(*, page_title=None, css=None, page_body):
+def read_css_file(file_name):
+    if file_name in css_cache:
+        return css_cache[file_name]
+
+    script_dir = os.path.dirname(__file__)
+    css_folder = os.path.join(script_dir, "css/")
+    css_file_path = os.path.join(css_folder, file_name)
+
+    with open(css_file_path, "r") as css_file:
+        css_string = css_file.read()
+    
+    css_cache[file_name] = css_string
+    
+    return css_string
+
+def render(page_title, page_body):
     # turn it into a list if it isnt one,
     # the body is later treated as a list
     if not isinstance(page_body, list):
         page_body = [page_body]
 
+    body_element = body(*page_body)
+
     head_elements = []
     if page_title:
         head_elements.append(title(page_title))
-    if css:
-        head_elements.append(style(css))
+    if body_element.css:
+        css_files = body_element.css
+        css_files.append("styles.css")
+        css_string = "\n\n".join([read_css_file(css_file) for css_file in css_files])
+
+        head_elements.append(style(css_string))
 
     return "<!DOCTYPE html>"+ \
         str(html(
             head(
                 *head_elements
             ),
-            body(*page_body)
+            body_element
         ))
 
 def render_err(err):
-    return site(page_title="Error", page_body=
+    return render(page_title="Error", page_body=
         div(
             p("Error :("),
             p(str(err))

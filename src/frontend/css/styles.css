@@ -1,0 +1,9 @@
+html {
+    background-color: rgb(41, 41, 41);
+}
+
+.html, body {
+    height: 100vh;
+    /* force it to be full height 
+       to make the height in text-content work*/
+}

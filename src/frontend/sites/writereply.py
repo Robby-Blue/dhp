@@ -1,12 +1,5 @@
-import os
 from frontend import *
 from frontend.snippets import post
-
-script_dir = os.path.dirname(__file__)
-css_file_path = os.path.join(script_dir, "../css/writereply.css")
-
-with open(css_file_path, "r") as css_file:
-    css_string = css_file.read()
 
 def get_writereply_site(data, err):
     if err:
@@ -19,8 +12,8 @@ def get_writereply_site(data, err):
 
     form_url = f"/writereply/{id}@{user}/"
 
-    return site(page_title="Write Reply", css=css_string, page_body=
-        div({"id": "content"},
+    return render("Write Reply",
+        div({"id": "content", "css": "writereply.css"},
             post(submission, has_bottom_bar=False, is_post=False),
             form({"action": form_url, "method": "POST"},
                 textarea({"name": "text"}),
