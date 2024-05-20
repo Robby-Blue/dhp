@@ -19,9 +19,63 @@ def get_index():
         "domain": self_domain
     }, None
 
-def get_posts():
-    result = db.query("SELECT * FROM posts WHERE is_self=true")
-    return [format_post(post) for post in result], None
+def get_posts(user=None):
+    if not user:
+        user = self_domain
+    user = fix_url(user)
+
+    if user == self_domain:
+        result = db.query("SELECT * FROM posts WHERE is_self=true")
+        posts = [format_post(post) for post in result]
+        return {"posts": posts}, None
+    
+    posts, _ = get_posts_from_instance(user)
+    if posts:
+        return {"posts": posts}, None
+
+    result = db.query("SELECT * FROM posts WHERE user=%s", (user,))
+    posts = [format_post(post) for post in result]
+    return {
+        "is_cached": True, 
+        "posts": posts
+    }, None
+
+def get_posts_from_instance(user):
+    domain = fix_url(user)
+
+    url = f"{domain}/api/posts/"
+    
+    try:
+        data = requests.get(url)
+
+        if not data:
+            post_exists = data.status_code != 404 
+            return None, {"error": f"{url} returned {data.status_code}", "post_exists": post_exists}
+
+        # post found, need to verify signature
+        posts = data.json()["posts"]
+    except:
+        # invalid json or bad request might be server error with an existing post
+        return None, {"error": f"http req to {url} didn't work", "post_exists": True}
+
+    results = db.query("SELECT * FROM posts WHERE user=%s", (user,))
+    ids = [result["id"] for result in results]
+
+    verified_posts = []
+
+    for post in posts:
+        post["is_self"] = False
+        
+        if post["id"] in ids:
+            # already in db, already verified
+            verified_posts.append(post)
+        else:
+            # verify it and then add it
+            verify_result = verify_and_add_post(post, domain)
+            if verify_result["verified"]:
+                verified_posts.append(post)
+
+    return verified_posts, None
 
 def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cached_global_as_fallback=True, allow_requests=True):
     post_id, user = parse_id(post_id)
@@ -159,7 +213,7 @@ VALUES (%s, %s, %s, %s, %s, %s)
 """, (post["id"], False, domain, post["text"], from_timestamp(post["posted_at"]), signature))
     
     return {
-        "verified": False,
+        "verified": True,
         "res": (post, None)
     }
 

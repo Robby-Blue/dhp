@@ -14,6 +14,16 @@ import backend
 app = Flask(__name__)
 
 # front end
+@app.route("/")
+def selfaccount():
+    data, err = backend.get_posts()
+    return sites.get_instance_site(data, err)
+
+@app.route("/instance/<path:instance>/")
+def account(instance):
+    data, err = backend.get_posts(instance)
+    return sites.get_instance_site(data, err)
+
 @app.route("/posts/<path:post_id>/")
 def post(post_id):
     data, err = backend.get_post(post_id)
