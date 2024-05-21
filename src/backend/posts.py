@@ -1,23 +1,10 @@
-import os
 import requests
 import time
-import uuid
-from datetime import datetime, timezone
-from urllib.parse import urlparse
-
-from database_helper import DatabaseHelper
+from datetime import datetime
 import crypto_helper as crypto
 
-# db stuff
-db = DatabaseHelper()
-db.connect()
-db.setup()
-
-def get_index():
-    return {
-        "public_key": crypto.get_public_pem(),
-        "domain": self_domain
-    }, None
+from backend import (db, self_domain, fix_url, parse_id, build_id, from_timestamp, to_timestamp, generate_id, )
+from backend.instances import get_pubkey_of_instance
 
 def get_posts(user=None):
     if not user:
@@ -381,23 +368,6 @@ def format_comment(sql_comment):
         "signature_verified": bool(sql_comment["signature_verified"]),
     }
 
-def get_pubkey_of_instance(domain):
-    try:
-        result = db.query("SELECT * FROM users WHERE domain=%s;", (domain,))
-
-        if len(result) == 1:
-            return crypto.public_key_from_string(result[0]["public_key"])
-        
-        r = requests.get(f"{domain}/api/")
-        key_string = r.json()["public_key"]
-
-        db.execute("INSERT INTO users (domain, public_key) VALUES (%s, %s)",
-                (domain, key_string))
-        
-        return crypto.public_key_from_string(key_string)
-    except:
-        return None
-
 def get_parent(parent):
     parent_id = parent["id"]
     parent_type = parent["type"]
@@ -420,16 +390,6 @@ def get_parent(parent):
     else:
         return None, None, "invalid parent type"
     return parent_post, parent_comment, False
-
-def fix_url(given_domain):
-    if not given_domain.startswith("http"):
-        default_scheme = os.getenv("DEFAULT_SCHEME")
-        given_domain=f"{default_scheme}://{given_domain}"
-    parsed_url = urlparse(given_domain)
-    domain = parsed_url.scheme+"://"+parsed_url.hostname
-    if parsed_url.port:
-        domain+=":"+str(parsed_url.port)
-    return domain
 
 def process_task_queue():
     while True:
@@ -509,31 +469,3 @@ UPDATE comments SET signature_verified=1 WHERE id=%s;
     # either its verified and done
     # or its unverifieable, no need to retry later
     return {"task_done": True, "verified": verified}
-
-def parse_id(id, return_self_domain=False):
-    if "@" in id:
-        segments = id.split("@")
-        id = segments[0]
-        user = fix_url(segments[1])
-        if user == self_domain and not return_self_domain:
-            user = None
-        return (id, user)
-    else:
-        return (id, None)
-    
-def build_id(id, user):
-    if not user:
-        user = self_domain
-    return f"{id}@{user}"
-
-def to_timestamp(datetime):
-    return int(datetime.replace(tzinfo=timezone.utc).timestamp())
-
-def from_timestamp(timestamp):
-    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
-
-def generate_id():
-    generated_uuid = uuid.uuid4()
-    return str(generated_uuid)
-
-self_domain = fix_url(os.getenv("DOMAIN"))

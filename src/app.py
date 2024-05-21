@@ -16,17 +16,17 @@ app = Flask(__name__)
 # front end
 @app.route("/")
 def selfaccount():
-    data, err = backend.get_posts()
+    data, err = backend.posts.get_posts()
     return sites.get_instance_site(data, err)
 
 @app.route("/instance/<path:instance>/")
 def account(instance):
-    data, err = backend.get_posts(instance)
+    data, err = backend.posts.get_posts(instance)
     return sites.get_instance_site(data, err)
 
 @app.route("/posts/<path:post_id>/")
 def post(post_id):
-    data, err = backend.get_post(post_id)
+    data, err = backend.posts.get_post(post_id)
     return sites.get_post_site(data, err)
 
 @app.route("/writepost/", methods=['GET'])
@@ -40,7 +40,7 @@ def writepost_post():
         return format_err({"error": "text not given", "code": 400}), 400
     text = form["text"]
 
-    res, err = backend.create_post(text)
+    res, err = backend.posts.create_post(text)
     if err:
         return format_err(err)
     
@@ -49,7 +49,7 @@ def writepost_post():
 
 @app.route("/writereply/<path:id>/", methods=['GET'])
 def writereply(id):
-    data, err = backend.get_post_or_comment(id)
+    data, err = backend.posts.get_post_or_comment(id)
     return sites.get_writereply_site(data, err)
 
 @app.route("/writereply/<path:id>/", methods=['POST'])
@@ -60,7 +60,7 @@ def writereply_post(id):
     
     text = form["text"]
 
-    data, err = backend.get_post_or_comment(id)
+    data, err = backend.posts.get_post_or_comment(id)
     if err:
         return format_err(err)
     
@@ -69,7 +69,7 @@ def writereply_post(id):
         "id": data["submission"]["id"]
     }
 
-    res, err = backend.create_comment(text, parent)
+    res, err = backend.posts.create_comment(text, parent)
     if err:
         return format_err(err)
     
@@ -79,15 +79,15 @@ def writereply_post(id):
 # api
 @app.route("/api/")
 def api_index():
-    return format_res(backend.get_index())
+    return format_res(backend.instances.get_index())
 
 @app.route("/api/posts/")
 def api_get_posts():
-    return format_res(backend.get_posts())
+    return format_res(backend.posts.get_posts())
 
 @app.route("/api/posts/<path:post_id>")
 def api_get_post(post_id):
-    res = backend.get_post(post_id)
+    res = backend.posts.get_post(post_id)
     return format_res(res)
 
 @app.route("/api/sharecomment/", methods=["POST"])
@@ -96,7 +96,7 @@ def api_sharecomment():
     comment = json_data["comment"]
     domain = json_data["domain"]
     
-    res = backend.share_comment(comment, domain)
+    res = backend.posts.share_comment(comment, domain)
     return format_res(res)
 
 def format_res(res):
@@ -111,7 +111,7 @@ def format_err(err):
     return jsonify(err)
 
 if __name__ == "__main__":
-    t=Thread(target=backend.process_task_queue)
+    t=Thread(target=backend.posts.process_task_queue)
     t.daemon = True
     t.start()
     app.run(host=os.getenv("HOST"), port=os.getenv("PORT"))
