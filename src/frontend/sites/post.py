@@ -23,7 +23,9 @@ def create_replies(parent_id, comments_lookup):
     
     replies = []
 
-    for comment in comments_lookup[parent_id]:
+    comments = sorted(comments_lookup[parent_id], key=lambda x: x["posted_at"], reverse=True)
+
+    for comment in comments:
         replies.append(post(comment, False, True))
         if comment["id"] in comments_lookup:
             replies.append(create_replies(comment["id"], comments_lookup))
