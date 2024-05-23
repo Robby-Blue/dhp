@@ -7,6 +7,7 @@ from frontend import sites
 
 # setup
 load_dotenv(".env")
+TOKEN = os.getenv("TOKEN")
 
 import backend
 
@@ -16,25 +17,40 @@ app = Flask(__name__)
 # front end
 @app.route("/")
 def selfaccount():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     data, err = backend.posts.get_posts()
     return sites.get_instance_site(data, err)
 
 @app.route("/instance/<path:instance>/")
 def account(instance):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     data, err = backend.posts.get_posts(instance)
     return sites.get_instance_site(data, err)
 
 @app.route("/posts/<path:post_id>/")
 def post(post_id):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     data, err = backend.posts.get_post(post_id)
     return sites.get_post_site(data, err)
 
 @app.route("/writepost/", methods=['GET'])
 def writepost():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     return sites.get_writepost_site()
 
 @app.route("/writepost/", methods=['POST'])
 def writepost_post():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     form = request.form
     if not "text" in form:
         return format_err({"error": "text not given", "code": 400}), 400
@@ -49,11 +65,17 @@ def writepost_post():
 
 @app.route("/writereply/<path:id>/", methods=['GET'])
 def writereply(id):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     data, err = backend.posts.get_post_or_comment(id)
     return sites.get_writereply_site(data, err)
 
 @app.route("/writereply/<path:id>/", methods=['POST'])
 def writereply_post(id):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
     form = request.form
     if not "text" in form:
         return format_err({"error": "text not given", "code": 400}), 400
@@ -75,6 +97,21 @@ def writereply_post(id):
     
     id = res["parent_post_id"]
     return redirect(f"/posts/{id}")
+
+@app.route("/login/", methods=['GET'])
+def login():
+    return sites.get_login_site()
+
+@app.route("/login/", methods=['POST'])
+def login_post():
+    form = request.form
+    if not "token" in form:
+        return format_err({"error": "token not given", "code": 400}), 400
+    
+    token = form["token"]
+    response = redirect("/")
+    response.set_cookie("token", token, httponly=True, secure=True, samesite='Strict')
+    return response
 
 # api
 @app.route("/api/")
