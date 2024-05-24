@@ -16,7 +16,7 @@ class DatabaseHelper:
 CREATE TABLE IF NOT EXISTS posts (
     id CHAR(36) NOT NULL UNIQUE,
     is_self BOOL NOT NULL,
-    user TEXT,
+    instance TEXT,
     text TEXT NOT NULL,
     posted_at TIMESTAMP NOT NULL,
     signature BLOB NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS comments (
     is_self BOOL NOT NULL,
     parent_post_id CHAR(36),
     parent_comment_id CHAR(36),
-    user TEXT,
+    instance TEXT,
     text TEXT NOT NULL,
     posted_at TIMESTAMP NOT NULL,
     signature BLOB NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS comments (
 """)
         
         self.execute("""
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS instances (
     domain TEXT NOT NULL,
     public_key TEXT NOT NULL
 );

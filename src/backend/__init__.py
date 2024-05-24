@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from database_helper import DatabaseHelper
+from backend.database_helper import DatabaseHelper
 
 def fix_url(given_domain):
     if not given_domain.startswith("http"):
@@ -19,17 +19,17 @@ def parse_id(id, return_self_domain=False):
     if "@" in id:
         segments = id.split("@")
         id = segments[0]
-        user = fix_url(segments[1])
-        if user == self_domain and not return_self_domain:
-            user = None
-        return (id, user)
+        instance = fix_url(segments[1])
+        if instance == self_domain and not return_self_domain:
+            instance = None
+        return (id, instance)
     else:
         return (id, None)
     
-def build_id(id, user):
-    if not user:
-        user = self_domain
-    return f"{id}@{user}"
+def build_id(id, instance):
+    if not instance:
+        instance = self_domain
+    return f"{id}@{instance}"
 
 def to_timestamp(datetime):
     return int(datetime.replace(tzinfo=timezone.utc).timestamp())

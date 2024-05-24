@@ -82,7 +82,7 @@ def stringify_post(post):
         post["id"],
         str(post["posted_at"]),
         post["text"].replace("-", "\\-"), 
-        remove_scheme_from_url(post["user"])
+        remove_scheme_from_url(post["instance"])
     ])
 
 def stringify_comment(comment):
@@ -97,7 +97,7 @@ def stringify_comment(comment):
         signature_to_string(parent_comment_signature) if parent_comment_signature else str(None),
         str(comment["posted_at"]),
         comment["text"].replace("-", "\\-"),
-        remove_scheme_from_url(comment["user"])
+        remove_scheme_from_url(comment["instance"])
     ])
 
 def remove_scheme_from_url(given_domain):

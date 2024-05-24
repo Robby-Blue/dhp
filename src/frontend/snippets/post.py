@@ -6,18 +6,18 @@ def format_timestamp(timestamp):
     return date_time.strftime("%B %d, %Y, %H:%M")
 
 def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
-    user = data["user"]
+    instance = data["instance"]
     id = data["id"]
     text = data["text"]
 
-    href = f"/writereply/{id}@{user}/"
+    href = f"/writereply/{id}@{instance}/"
     
     date_text_element = p(
         {"class": "date"},
         format_timestamp(data["posted_at"]))
 
     if is_link:
-        date_element = a({"href": f"/posts/{id}@{user}/"},
+        date_element = a({"href": f"/posts/{id}@{instance}/"},
             date_text_element)
     else:
         date_element = date_text_element
@@ -36,7 +36,7 @@ def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
     submission_class = "submission post" if is_post else "submission"
 
     return div({"class": submission_class, "css": "snippets/post.css"},
-        p({"class": "author"}, user),
+        p({"class": "author"}, instance),
         p({"class": "text"}, text),
         bottom_bar
     )

@@ -8,9 +8,9 @@ def get_writereply_site(data, err):
     submission = data["submission"]
 
     id = submission["id"]
-    user = submission["user"]
+    instance = submission["instance"]
 
-    form_url = f"/writereply/{id}@{user}/"
+    form_url = f"/writereply/{id}@{instance}/"
 
     return render("Write Reply",
         div({"id": "content", "css": "writereply.css"},

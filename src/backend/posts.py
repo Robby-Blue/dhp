@@ -1,34 +1,34 @@
 import requests
 import time
 from datetime import datetime
-import crypto_helper as crypto
+import backend.crypto_helper as crypto
 
 from backend import (db, self_domain, fix_url, parse_id, build_id, from_timestamp, to_timestamp, generate_id, )
 from backend.instances import get_pubkey_of_instance
 
-def get_posts(user=None):
-    if not user:
-        user = self_domain
-    user = fix_url(user)
+def get_posts(instance=None):
+    if not instance:
+        instance = self_domain
+    instance = fix_url(instance)
 
-    if user == self_domain:
+    if instance == self_domain:
         result = db.query("SELECT * FROM posts WHERE is_self=true")
         posts = [format_post(post) for post in result]
         return {"posts": posts}, None
     
-    posts, _ = get_posts_from_instance(user)
+    posts, _ = get_posts_from_instance(instance)
     if posts:
         return {"posts": posts}, None
 
-    result = db.query("SELECT * FROM posts WHERE user=%s", (user,))
+    result = db.query("SELECT * FROM posts WHERE instance=%s", (instance,))
     posts = [format_post(post) for post in result]
     return {
         "is_cached": True, 
         "posts": posts
     }, None
 
-def get_posts_from_instance(user):
-    domain = fix_url(user)
+def get_posts_from_instance(instance):
+    domain = fix_url(instance)
 
     url = f"{domain}/api/posts/"
     
@@ -45,7 +45,7 @@ def get_posts_from_instance(user):
         # invalid json or bad request might be server error with an existing post
         return None, {"error": f"http req to {url} didn't work", "post_exists": True}
 
-    results = db.query("SELECT * FROM posts WHERE user=%s", (user,))
+    results = db.query("SELECT * FROM posts WHERE instance=%s", (instance,))
     ids = [result["id"] for result in results]
 
     verified_posts = []
@@ -65,9 +65,9 @@ def get_posts_from_instance(user):
     return verified_posts, None
 
 def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cached_global_as_fallback=True, allow_requests=True):
-    post_id, user = parse_id(post_id)
+    post_id, instance = parse_id(post_id)
 
-    local_search = not bool(user)
+    local_search = not bool(instance)
     if local_search or use_cached_global:
         post, error = get_post_from_db(post_id, use_cached_global, load_comments)
         if post:
@@ -78,8 +78,8 @@ def get_post(post_id, *, load_comments=True, use_cached_global=False, allow_cach
             return post, error
     
     # local search and no post found, continue
-    if allow_requests and user:
-        post, error = get_post_from_instance(user, post_id, load_comments=load_comments)
+    if allow_requests and instance:
+        post, error = get_post_from_instance(instance, post_id, load_comments=load_comments)
         if post:
             return post, error
         # if the post (might) exist it we shouldnt error yet and 
@@ -117,9 +117,9 @@ SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
     
     return post, None
 
-def get_post_from_instance(user, post_id, *, load_comments=True):
+def get_post_from_instance(instance, post_id, *, load_comments=True):
     post_id, _ = parse_id(post_id)
-    domain = fix_url(user)
+    domain = fix_url(instance)
     url = f"{domain}/api/posts/{post_id}"
     
     try:
@@ -186,7 +186,7 @@ def verify_and_add_post(post, domain):
         "id": post["id"],
         "posted_at": post["posted_at"],
         "text": post["text"],
-        "user": domain
+        "instance": domain
     }), signature, pubkey):
         return {
             "verified": False,
@@ -195,7 +195,7 @@ def verify_and_add_post(post, domain):
 
     post["is_self"] = False
     db.execute("""
-INSERT INTO posts (id, is_self, user, text, posted_at, signature)
+INSERT INTO posts (id, is_self, instance, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s)
 """, (post["id"], False, domain, post["text"], from_timestamp(post["posted_at"]), signature))
     
@@ -219,9 +219,9 @@ def verify_and_add_comment(comment, verify_now):
     signature = crypto.signature_from_string(comment["signature"])
 
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature, signature_verified)
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance, text, posted_at, signature, signature_verified)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-(comment["id"], False, parent_post["id"], parent_comment_id, comment["user"], comment["text"], from_timestamp(comment["posted_at"]), signature, False))
+(comment["id"], False, parent_post["id"], parent_comment_id, comment["instance"], comment["text"], from_timestamp(comment["posted_at"]), signature, False))
 
     verified = False
 
@@ -232,7 +232,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
     if not verified:
         db.execute("""
     INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
-    """, ("verify_comment", comment["user"], comment["id"]))
+    """, ("verify_comment", comment["instance"], comment["id"]))
     
     return {
         "verified": verified,
@@ -247,11 +247,11 @@ def create_post(text):
         "id": uuid,
         "posted_at": timestamp,
         "text": text,
-        "user": self_domain
+        "instance": self_domain
     }))
 
     db.execute("""
-INSERT INTO posts (id, is_self, user, text, posted_at, signature)
+INSERT INTO posts (id, is_self, instance, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s);
 """, (uuid, True, self_domain, text, from_timestamp(timestamp), signature))
     
@@ -262,10 +262,10 @@ def get_comments():
     return [format_comment(comment) for comment in result], None
 
 def get_comment(comment_id):
-    comment_id, user = parse_id(comment_id)
+    comment_id, instance = parse_id(comment_id)
 
-    if user:
-        result = db.query("SELECT * FROM comments WHERE id=%s AND user=%s", (comment_id, user))
+    if instance:
+        result = db.query("SELECT * FROM comments WHERE id=%s AND instance=%s", (comment_id, instance))
     else:
         result = db.query("SELECT * FROM comments WHERE id=%s AND is_self=true", (comment_id,))
 
@@ -295,25 +295,25 @@ def create_comment(text, parent):
         "parent_comment_signature": parent_comment["signature"] if parent_comment else None,
         "posted_at": timestamp,
         "text": text,
-        "user": self_domain
+        "instance": self_domain
     }))
 
     # need the uuid for later
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, user, text, posted_at, signature, signature_verified) 
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance, text, posted_at, signature, signature_verified) 
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 """, (uuid, True, parent_post["id"], parent_comment_id, self_domain, text, from_timestamp(timestamp), signature, True))
 
     # share comment to post host
     post, _ = get_post(parent_post["id"], use_cached_global=True)
-    instance = post["user"]
+    instance = post["instance"]
 
     if instance != self_domain:
         db.execute("""
 INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
-    parent_id = build_id(post["id"], post["user"])
+    parent_id = build_id(post["id"], post["instance"])
     return {"parent_post_id": parent_id}, None
 
 def share_comment(comment, domain):
@@ -342,7 +342,7 @@ def format_post(sql_post):
         "is_self": bool(sql_post["is_self"]),
         "posted_at": to_timestamp(sql_post["posted_at"]),
         "text": sql_post["text"],
-        "user": sql_post["user"],
+        "instance": sql_post["instance"],
         "signature": crypto.signature_to_string(sql_post["signature"])
     }
 
@@ -363,7 +363,7 @@ def format_comment(sql_comment):
         },
         "posted_at": to_timestamp(sql_comment["posted_at"]),
         "text": sql_comment["text"],
-        "user": sql_comment["user"],
+        "instance": sql_comment["instance"],
         "signature": crypto.signature_to_string(sql_comment["signature"]),
         "signature_verified": bool(sql_comment["signature_verified"]),
     }
@@ -445,7 +445,7 @@ WHERE
     comment = result[0]
 
     signature = comment["signature"]
-    pubkey = get_pubkey_of_instance(comment["user"])
+    pubkey = get_pubkey_of_instance(comment["instance"])
 
     if not pubkey:
         return {"task_done": False, "verified": False}
@@ -458,7 +458,7 @@ WHERE
         "parent_comment_signature": comment["parent_comment_signature"],
         "posted_at": to_timestamp(comment["posted_at"]),
         "text": comment["text"],
-        "user": comment["user"]
+        "instance": comment["instance"]
     }), signature, pubkey)
 
     if verified:
