@@ -3,8 +3,6 @@ import uuid
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from backend.database_helper import DatabaseHelper
-
 def fix_url(given_domain):
     if not given_domain.startswith("http"):
         default_scheme = os.getenv("DEFAULT_SCHEME")
@@ -44,6 +42,8 @@ def generate_id():
 self_domain = fix_url(os.getenv("DOMAIN"))
 
 # db stuff
+from backend.database_helper import DatabaseHelper
+
 db = DatabaseHelper()
 db.connect()
 db.setup()

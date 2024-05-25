@@ -4,7 +4,7 @@ from datetime import datetime
 import backend.crypto_helper as crypto
 
 from backend import (db, self_domain, fix_url, parse_id, build_id, from_timestamp, to_timestamp, generate_id, )
-from backend.instances import get_pubkey_of_instance
+from backend.instances import get_instance, get_pubkey_of_instance
 
 def get_posts(instance=None):
     if not instance:
@@ -12,7 +12,7 @@ def get_posts(instance=None):
     instance = fix_url(instance)
 
     if instance == self_domain:
-        result = db.query("SELECT * FROM posts WHERE is_self=true")
+        result = db.query("SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE posts.is_self=true")
         posts = [format_post(post) for post in result]
         return {"posts": posts}, None
     
@@ -20,7 +20,7 @@ def get_posts(instance=None):
     if posts:
         return {"posts": posts}, None
 
-    result = db.query("SELECT * FROM posts WHERE instance=%s", (instance,))
+    result = db.query("SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE instance_domain=%s", (instance,))
     posts = [format_post(post) for post in result]
     return {
         "is_cached": True, 
@@ -45,7 +45,7 @@ def get_posts_from_instance(instance):
         # invalid json or bad request might be server error with an existing post
         return None, {"error": f"http req to {url} didn't work", "post_exists": True}
 
-    results = db.query("SELECT * FROM posts WHERE instance=%s", (instance,))
+    results = db.query("SELECT * FROM posts WHERE instance_domain=%s", (instance,))
     ids = [result["id"] for result in results]
 
     verified_posts = []
@@ -100,9 +100,9 @@ def get_post_from_db(post_id, allow_global, load_comments):
     post_id, _ = parse_id(post_id)
 
     if allow_global:
-        query = "SELECT * FROM posts WHERE id=%s"
+        query = "SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE id=%s"
     else:
-        query = "SELECT * FROM posts WHERE id=%s AND is_self=true"
+        query = "SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE id=%s AND posts.is_self=true"
 
     result = db.query(query, (post_id,))
 
@@ -112,7 +112,7 @@ def get_post_from_db(post_id, allow_global, load_comments):
 
     if load_comments:
         comments_result = db.query("""
-SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
+SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE parent_post_id=%s""", (post_id,))
         post["comments"] = [format_comment(comment) for comment in comments_result if comment["signature_verified"]]
     
     return post, None
@@ -136,7 +136,7 @@ def get_post_from_instance(instance, post_id, *, load_comments=True):
         return None, {"error": f"http req to {url} didn't work", "post_exists": True}
 
     post["is_self"] = False
-    result = result = db.query("SELECT * FROM posts WHERE id=%s", (post["id"],))
+    result = db.query("SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE id=%s", (post["id"],))
 
     if len(result) == 0:
         verify_result = verify_and_add_post(post, domain)
@@ -150,24 +150,48 @@ def get_post_from_instance(instance, post_id, *, load_comments=True):
         post.pop("comments")
     else:
         # try to find known comments locally
+        # together with their instances data
         comments_result = db.query("""
-SELECT * FROM comments WHERE parent_post_id=%s""", (post_id,))
-        comments = {}
+SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE parent_post_id=%s""", (post_id,))
+        
+        # make a list of all local comments and their
+        # instances info, we can use this later to not duplicate
+        # comments from other instances and to not have to ask sql
+        # about each new comment from other instances
+        instance_lookup = {}
+        local_comments = {}
         for comment in comments_result:
-            comments[comment["id"]] = format_comment(comment)
+            formatted = format_comment(comment)
+            instance_lookup[formatted["instance"]] = formatted["author"]
+            local_comments[formatted["id"]] = formatted
+
+        found_all_instances = True
 
         for i, comment in enumerate(post["comments"]):
-            if comment["id"] in comments:
-                post["comments"][i] = comments.pop(comment["id"])
+            comment.pop("author") # dont trust what the other instance says
+            if comment["id"] in local_comments:
+                post["comments"][i] = local_comments.pop(comment["id"])
                 # remove comment from `comments` such that all remaining elements
                 # will be comments which the other instance doesnt know about
                 continue
             comment["signature_verified"] = verify_and_add_comment(comment, True)["verified"]
 
-        for comment in comments.values():
-            if not comment["signature_verified"]:
-                continue
-            post["comments"].append(comment)
+            if comment["instance"] in instance_lookup:
+                comment["author"] = instance_lookup[comment["instance"]]
+            else:
+                if comment["signature_verified"]:
+                    # real comment without instance data known
+                    found_all_instances = False
+
+        if found_all_instances:
+            for comment in local_comments.values():
+                if not comment["signature_verified"]:
+                    continue
+                post["comments"].append(comment)
+        else:
+            comments_result = db.query("""
+SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE parent_post_id=%s""", (post_id,))
+            post["comments"] = [format_comment(comment) for comment in comments_result if comment["signature_verified"]]
 
     return post, None
 
@@ -195,7 +219,7 @@ def verify_and_add_post(post, domain):
 
     post["is_self"] = False
     db.execute("""
-INSERT INTO posts (id, is_self, instance, text, posted_at, signature)
+INSERT INTO posts (id, is_self, instance_domain, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s)
 """, (post["id"], False, domain, post["text"], from_timestamp(post["posted_at"]), signature))
     
@@ -216,10 +240,16 @@ def verify_and_add_comment(comment, verify_now):
             "res": (None, {"error": "unknown dependent id", "code": 404})
         }
 
+    if not get_instance(comment["instance"]):
+        return {
+            "verified": False,
+            "res": (None, {"error": "instance not found", "code": 400})
+        }
+
     signature = crypto.signature_from_string(comment["signature"])
 
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance, text, posted_at, signature, signature_verified)
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance_domain, text, posted_at, signature, signature_verified)
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
 (comment["id"], False, parent_post["id"], parent_comment_id, comment["instance"], comment["text"], from_timestamp(comment["posted_at"]), signature, False))
 
@@ -231,8 +261,8 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
     
     if not verified:
         db.execute("""
-    INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
-    """, ("verify_comment", comment["instance"], comment["id"]))
+INSERT INTO task_queue (type, instance_domain, comment_id) VALUES (%s, %s, %s) 
+""", ("verify_comment", comment["instance"], comment["id"]))
     
     return {
         "verified": verified,
@@ -251,23 +281,23 @@ def create_post(text):
     }))
 
     db.execute("""
-INSERT INTO posts (id, is_self, instance, text, posted_at, signature)
+INSERT INTO posts (id, is_self, instance_domain, text, posted_at, signature)
 VALUES (%s, %s, %s, %s, %s, %s);
 """, (uuid, True, self_domain, text, from_timestamp(timestamp), signature))
     
     return {"id": uuid}, None
 
 def get_comments():
-    result = db.query("SELECT * FROM comments")
+    result = db.query("SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain")
     return [format_comment(comment) for comment in result], None
 
 def get_comment(comment_id):
     comment_id, instance = parse_id(comment_id)
 
     if instance:
-        result = db.query("SELECT * FROM comments WHERE id=%s AND instance=%s", (comment_id, instance))
+        result = db.query("SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE id=%s AND instance_domain=%s", (comment_id, instance))
     else:
-        result = db.query("SELECT * FROM comments WHERE id=%s AND is_self=true", (comment_id,))
+        result = db.query("SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE id=%s AND comments.is_self=true", (comment_id,))
 
     if len(result) == 0:
         return None, {"error": "comment not found", "code": 404}
@@ -300,7 +330,7 @@ def create_comment(text, parent):
 
     # need the uuid for later
     db.execute("""
-INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance, text, posted_at, signature, signature_verified) 
+INSERT INTO comments (id, is_self, parent_post_id, parent_comment_id, instance_domain, text, posted_at, signature, signature_verified) 
 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 """, (uuid, True, parent_post["id"], parent_comment_id, self_domain, text, from_timestamp(timestamp), signature, True))
 
@@ -310,7 +340,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
 
     if instance != self_domain:
         db.execute("""
-INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s) 
+INSERT INTO task_queue (type, instance_domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
     parent_id = build_id(post["id"], post["instance"])
@@ -319,7 +349,7 @@ INSERT INTO task_queue (type, domain, comment_id) VALUES (%s, %s, %s)
 def share_comment(comment, domain):
     domain = fix_url(domain)
 
-    result = db.query("SELECT * FROM comments WHERE id=%s", (comment["id"],))
+    result = db.query("SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE id=%s", (comment["id"],))
     if len(result) != 0:
         return None, {"error": "already exists", "code": 400}
 
@@ -342,8 +372,12 @@ def format_post(sql_post):
         "is_self": bool(sql_post["is_self"]),
         "posted_at": to_timestamp(sql_post["posted_at"]),
         "text": sql_post["text"],
-        "instance": sql_post["instance"],
-        "signature": crypto.signature_to_string(sql_post["signature"])
+        "instance": sql_post["instance_domain"],
+        "signature": crypto.signature_to_string(sql_post["signature"]),
+        "author": {
+            "nickname": sql_post["nickname"],
+            "pronouns": sql_post["pronouns"]
+        }
     }
 
 def format_comment(sql_comment):
@@ -363,9 +397,13 @@ def format_comment(sql_comment):
         },
         "posted_at": to_timestamp(sql_comment["posted_at"]),
         "text": sql_comment["text"],
-        "instance": sql_comment["instance"],
+        "instance": sql_comment["instance_domain"],
         "signature": crypto.signature_to_string(sql_comment["signature"]),
         "signature_verified": bool(sql_comment["signature_verified"]),
+        "author": {
+            "nickname": sql_comment["nickname"],
+            "pronouns": sql_comment["pronouns"]
+        }
     }
 
 def get_parent(parent):
@@ -376,16 +414,16 @@ def get_parent(parent):
     parent_comment = None
 
     if parent_type == "post":
-        result = db.query("SELECT * FROM posts WHERE id=%s", (parent_id,))
+        result = db.query("SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE id=%s", (parent_id,))
         if len(result) == 0:
             return None, None, "parent not found"
         parent_post = result[0]
     elif parent_type == "comment":
-        result = db.query("SELECT * FROM comments WHERE id=%s", (parent_id,))
+        result = db.query("SELECT * FROM comments JOIN instances ON comments.instance_domain = instances.domain WHERE id=%s", (parent_id,))
         if len(result) == 0:
             return None, None, "parent not found"
         parent_comment = result[0]
-        result = db.query("SELECT * FROM posts WHERE id=%s", (parent_comment["parent_post_id"],))
+        result = db.query("SELECT * FROM posts JOIN instances ON posts.instance_domain = instances.domain WHERE id=%s", (parent_comment["parent_post_id"],))
         parent_post = result[0]
     else:
         return None, None, "invalid parent type"
@@ -411,7 +449,7 @@ def process_task(task):
     return {"task_done": False} # idk what to do
 
 def process_share_comment_task(task):
-    instance = task["domain"]
+    instance = task["instance_domain"]
     uuid = task["comment_id"]
 
     try:
@@ -445,7 +483,7 @@ WHERE
     comment = result[0]
 
     signature = comment["signature"]
-    pubkey = get_pubkey_of_instance(comment["instance"])
+    pubkey = get_pubkey_of_instance(comment["instance_domain"])
 
     if not pubkey:
         return {"task_done": False, "verified": False}
@@ -458,7 +496,7 @@ WHERE
         "parent_comment_signature": comment["parent_comment_signature"],
         "posted_at": to_timestamp(comment["posted_at"]),
         "text": comment["text"],
-        "instance": comment["instance"]
+        "instance": comment["instance_domain"]
     }), signature, pubkey)
 
     if verified:

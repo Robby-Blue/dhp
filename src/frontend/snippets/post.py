@@ -5,7 +5,7 @@ def format_timestamp(timestamp):
     date_time = datetime.fromtimestamp(timestamp, timezone.utc)
     return date_time.strftime("%B %d, %Y, %H:%M")
 
-def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
+def generate(data, /, is_post=True, has_reply_button=True, is_link=False):
     instance = data["instance"]
     id = data["id"]
     text = data["text"]
@@ -13,7 +13,7 @@ def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
     href = f"/writereply/{id}@{instance}/"
     
     date_text_element = p(
-        {"class": "date"},
+        {"class": "secondary-info"},
         format_timestamp(data["posted_at"]))
 
     if is_link:
@@ -22,8 +22,8 @@ def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
     else:
         date_element = date_text_element
 
-    if has_bottom_bar:
-        bottom_bar = div({"class": "bottom-bar"},
+    if has_reply_button:
+        bottom_bar = div({"class": "inline-bar space-between"},
             date_element,
             a(
                 {"href": href},
@@ -35,8 +35,17 @@ def generate(data, /, is_post=True, has_bottom_bar=True, is_link=False):
     
     submission_class = "submission post" if is_post else "submission"
 
+    author = data["author"]
+
+    nickname = author["nickname"]
+    pronouns = author["pronouns"]
+
     return div({"class": submission_class, "css": "snippets/post.css"},
-        p({"class": "author"}, instance),
-        p({"class": "text"}, text),
+        div({"class": "inline-bar"},
+            p({"class": "nickname primary-color"}, nickname),
+            p({"class": "secondary-info"}, pronouns),
+        ),
+        p({"class": "secondary-info"}, instance),
+        p({"class": "text primary-color"}, text),
         bottom_bar
     )

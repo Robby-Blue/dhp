@@ -14,7 +14,7 @@ def get_writereply_site(data, err):
 
     return render("Write Reply",
         div({"id": "content", "css": "writereply.css"},
-            post(submission, has_bottom_bar=False, is_post=False),
+            post(submission, has_reply_button=False, is_post=False),
             form({"action": form_url, "method": "POST"},
                 textarea({"name": "text"}),
                 br(),
