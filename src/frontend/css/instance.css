@@ -1,0 +1,33 @@
+#content {
+    margin: auto;
+    width: 50%;
+}
+
+p {
+    color: white;
+}
+
+.instance-div {
+    width: max-content;
+    background-color: rgb(83, 83, 83);
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+}
+
+.instance-div p {
+    margin: 0;
+}
+
+.primary-color {
+    color: rgb(228, 228, 228);
+}
+
+.secondary-info {
+    color: rgb(189, 189, 189);
+    font-size: 0.8rem;
+}
+
+.nickname {
+    padding-right: 10px;
+}

@@ -4,7 +4,7 @@ from datetime import datetime
 import backend.crypto_helper as crypto
 
 from backend import (db, self_domain, fix_url, parse_id, build_id, from_timestamp, to_timestamp, generate_id, )
-from backend.instances import get_instance, get_pubkey_of_instance
+from backend.instances import get_instance_data, get_pubkey_of_instance
 
 def get_posts(instance=None):
     if not instance:
@@ -240,7 +240,8 @@ def verify_and_add_comment(comment, verify_now):
             "res": (None, {"error": "unknown dependent id", "code": 404})
         }
 
-    if not get_instance(comment["instance"]):
+    _, instance_err = get_instance_data(comment["instance"])
+    if not instance_err:
         return {
             "verified": False,
             "res": (None, {"error": "instance not found", "code": 400})

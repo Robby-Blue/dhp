@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS task_queue (
         
         if not self.query(
 "SELECT * FROM instances WHERE domain = %s", (self_domain,)):
-            self.execute("INSERT INTO instances (is_self, domain, nickname, pronouns, bio) VALUES (%s, %s, %s, %s, %s)",
-                (True, self_domain, self_domain, "not set", ":D"))
+            self.execute("INSERT INTO instances (is_self, domain, public_key, nickname, pronouns, bio) VALUES (%s, %s, %s, %s, %s, %s)",
+                (True, self_domain, crypto.get_public_pem(), self_domain, "not set", ":D"))
 
     def query(self, statement, values=()):
         self.cursor.execute(statement, values)
