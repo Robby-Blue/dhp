@@ -7,3 +7,12 @@ html {
     /* force it to be full height 
        to make the height in text-content work*/
 }
+
+.primary-color {
+    color: rgb(228, 228, 228);
+}
+
+.secondary-info {
+    color: rgb(189, 189, 189);
+    font-size: 0.8rem;
+}

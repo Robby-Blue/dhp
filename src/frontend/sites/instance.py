@@ -28,7 +28,7 @@ def get_instance_site(data, err):
             div({"class": "instance-div"},
                 div({"class": "inline-bar"},
                     p({"class": "nickname primary-color"}, nickname),
-                    p({"class": "secondary-info"}, pronouns),
+                    p({"class": "secondary-color secondary-info"}, pronouns),
                 ),
                 p({"class": "secondary-info"}, domain),
                 p({"class": "primary-color"}, bio)
