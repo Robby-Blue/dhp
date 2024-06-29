@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS comments (
         self.execute("""
 CREATE TABLE IF NOT EXISTS task_queue (
     id INT auto_increment,
+    retries INT DEFAULT 0,
+    last_tried_at TIMESTAMP DEFAULT NULL,
     instance_domain VARCHAR(267) NOT NULL,
     type VARCHAR(25),
     comment_id CHAR(36),

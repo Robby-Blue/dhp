@@ -10,6 +10,7 @@ load_dotenv(".env")
 TOKEN = os.getenv("TOKEN")
 
 import backend
+import backend.task_queue
 
 # web server
 app = Flask(__name__)
@@ -148,7 +149,7 @@ def format_err(err):
     return jsonify(err)
 
 if __name__ == "__main__":
-    t=Thread(target=backend.posts.process_task_queue)
+    t=Thread(target=backend.task_queue.start_task_queue)
     t.daemon = True
     t.start()
     app.run(host=os.getenv("HOST"), port=os.getenv("PORT"))

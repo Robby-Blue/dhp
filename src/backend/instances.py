@@ -73,7 +73,6 @@ def get_instance_data(domain):
     except Exception as e:
         return None, {"error": e, "code": 500}
 
-
 def get_pubkey_of_instance(domain):
     data, err = get_instance_data(domain)
     if err:

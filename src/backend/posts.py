@@ -1,5 +1,4 @@
 import requests
-import time
 from datetime import datetime
 import backend.crypto_helper as crypto
 
@@ -241,7 +240,7 @@ def verify_and_add_comment(comment, verify_now):
         }
 
     _, instance_err = get_instance_data(comment["instance"])
-    if not instance_err:
+    if instance_err:
         return {
             "verified": False,
             "res": (None, {"error": "instance not found", "code": 400})
@@ -430,25 +429,6 @@ def get_parent(parent):
         return None, None, "invalid parent type"
     return parent_post, parent_comment, False
 
-def process_task_queue():
-    while True:
-        tasks = db.query("SELECT * FROM task_queue;")
-        for task in tasks:
-            should_delete = process_task(task)["task_done"]
-            if should_delete:
-                db.execute("DELETE FROM task_queue WHERE id=%s",
-                    (task["id"],))
-
-        time.sleep(600)
-
-def process_task(task):
-    task_type = task["type"]
-    if task_type == "share_comment":
-        return process_share_comment_task(task)
-    if task_type == "verify_comment":
-        return process_verify_comment_task(task)
-    return {"task_done": False} # idk what to do
-
 def process_share_comment_task(task):
     instance = task["instance_domain"]
     uuid = task["comment_id"]
@@ -460,13 +440,13 @@ def process_share_comment_task(task):
                 "comment": get_comment(uuid)[0]
             })
         if r.status_code == 200:
-            return {"task_done": True}
+            return {"state": "success"}
         
-        # stop resending comments it already knows about
-        if r.json()["error"] == "already exists":
-            return {"task_done": True}
+        if r.status_code == 400:
+            return {"state": "delete"}
+        return {"state": "retry"}
     except:
-        return {"task_done": False}
+        return {"state": "retry"}
     
 def process_verify_comment_task(task):
     result = db.query("""
@@ -487,7 +467,7 @@ WHERE
     pubkey = get_pubkey_of_instance(comment["instance_domain"])
 
     if not pubkey:
-        return {"task_done": False, "verified": False}
+        return {"state": "retry", "verified": False}
 
     verified = crypto.verify_signature(crypto.stringify_comment({
         "id": comment["id"],
@@ -507,4 +487,4 @@ UPDATE comments SET signature_verified=1 WHERE id=%s;
 
     # either its verified and done
     # or its unverifieable, no need to retry later
-    return {"task_done": True, "verified": verified}
+    return {"state": "success", "verified": verified}
