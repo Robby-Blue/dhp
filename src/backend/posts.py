@@ -4,6 +4,7 @@ import backend.crypto_helper as crypto
 
 from backend import (db, self_domain, fix_url, parse_id, build_id, from_timestamp, to_timestamp, generate_id, )
 from backend.instances import get_instance_data, get_pubkey_of_instance
+from backend.task_queue import add_to_task_queue
 
 def get_posts(instance=None):
     if not instance:
@@ -260,7 +261,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         verified = res["verified"]
     
     if not verified:
-        db.execute("""
+        add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, comment_id) VALUES (%s, %s, %s) 
 """, ("verify_comment", comment["instance"], comment["id"]))
     
@@ -339,7 +340,7 @@ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
     instance = post["instance"]
 
     if instance != self_domain:
-        db.execute("""
+        add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, comment_id) VALUES (%s, %s, %s) 
 """, ("share_comment", instance, uuid))
 
