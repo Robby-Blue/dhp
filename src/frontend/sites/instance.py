@@ -1,5 +1,5 @@
 from frontend import *
-from frontend.snippets import post, warning
+from frontend.snippets import post, banner
 
 def get_instance_site(data, err):
     if err:
@@ -24,7 +24,7 @@ def get_instance_site(data, err):
     return render("Instance",
         div(
             {"id": "content", "css": "instance.css"},
-            warning(is_cached, "This data is cached"),
+            banner(is_cached, "warning", "This data is cached"),
             div({"class": "instance-div"},
                 div({"class": "inline-bar"},
                     p({"class": "nickname primary-color"}, nickname),

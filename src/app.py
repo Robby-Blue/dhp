@@ -99,6 +99,27 @@ def writereply_post(id):
     id = res["parent_post_id"]
     return redirect(f"/posts/{id}")
 
+@app.route("/settings/", methods=['GET'])
+def settings():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
+    
+    data, _ = backend.instances.get_instance_data(backend.self_domain)
+    return sites.get_settings_site(data)
+
+@app.route("/settings/", methods=['POST'])
+def settings_post():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
+
+    data, err = backend.instances.edit_settings(request.form)
+    if err:
+        return format_err(err)
+
+    return sites.get_settings_site(data, edited=True)
+
 @app.route("/login/", methods=['GET'])
 def login():
     return sites.get_login_site()

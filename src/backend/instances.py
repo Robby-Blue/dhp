@@ -78,3 +78,18 @@ def get_pubkey_of_instance(domain):
     if err:
         return None, err
     return data["public_key"]
+
+def edit_settings(form):
+    expected_values = ["nickname", "pronouns", "bio"]
+    for expected_value in expected_values:
+        if expected_value not in form:
+            return None, {"error": f"expected value {expected_value}", "code": 400}
+
+    nickname = form["nickname"]
+    pronouns = form["pronouns"]
+    bio = form["bio"]
+
+    db.execute("UPDATE instances SET nickname=%s, pronouns=%s, bio=%s WHERE domain=%s",
+(nickname, pronouns, bio, backend.self_domain))
+
+    return form, None

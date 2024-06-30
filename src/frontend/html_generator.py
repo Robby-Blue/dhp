@@ -120,6 +120,9 @@ def div(*args):
 def p(*args):
     return HtmlElement("p", args)
 
+def h1(*args):
+    return HtmlElement("h1", args)
+
 def a(*args):
     return HtmlElement("a", args)
 
@@ -131,6 +134,9 @@ def form(*args):
 
 def input(*args):
     return HtmlElement("input", args, self_closing=True)
+
+def label(*args):
+    return HtmlElement("label", args)
 
 def textarea(*args):
     return HtmlElement("textarea", args)

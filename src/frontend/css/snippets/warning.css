@@ -1,8 +1,15 @@
-.warning {
+.banner {
     width: 100%;
-    background-color: orange;
     text-align: center;
     padding: 8px;
     margin-bottom: 8px;
     border-radius: 8px;
+}
+
+.warning {
+    background-color: orange;
+}
+
+.success {
+    background-color: greenyellow;
 }
