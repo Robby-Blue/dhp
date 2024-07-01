@@ -25,7 +25,7 @@ def get_instance_with_posts(instance=None):
     posts_data, err = posts.get_posts(instance)
     if err:
         return None, err
-    instance, err = get_instance_data(instance)
+    instance, err = get_instance_data(instance, prefer_cache=False)
     if err:
         return None, err
     return {
@@ -33,9 +33,12 @@ def get_instance_with_posts(instance=None):
         "instance": instance
     }, None
 
-def get_instance_data(domain):
+def get_instance_data(domain, prefer_cache=True):
     try:
-        results = db.query("SELECT * FROM instances WHERE domain=%s;", (domain,))
+        if prefer_cache:
+            results = db.query("SELECT * FROM instances WHERE domain=%s;", (domain,))
+        else:
+            results = []
 
         if len(results) == 1:
             result = results[0]
@@ -52,8 +55,15 @@ def get_instance_data(domain):
             pronouns = data["pronouns"]
             bio = data["bio"]
 
-            db.execute("INSERT INTO instances (domain, public_key, nickname, pronouns, bio) VALUES (%s, %s, %s, %s, %s)",
-                (domain, key_string, nickname, pronouns, bio))
+            db.execute("""
+INSERT INTO instances
+    (domain, public_key, nickname, pronouns, bio)
+VALUES
+    (%s, %s, %s, %s, %s)
+ON DUPLICATE KEY UPDATE
+    nickname=%s, pronouns=%s, bio=%s
+""",
+                (domain, key_string, nickname, pronouns, bio, nickname, pronouns, bio))
         else:
             return None, {"error": "bad sql", "code": 500}
         
