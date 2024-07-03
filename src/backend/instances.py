@@ -35,7 +35,9 @@ def get_instance_with_posts(instance=None):
 
 def get_instance_data(domain, prefer_cache=True):
     try:
-        if prefer_cache:
+        is_self = domain == backend.self_domain
+
+        if prefer_cache or is_self:
             results = db.query("SELECT * FROM instances WHERE domain=%s;", (domain,))
         else:
             results = []
@@ -46,7 +48,7 @@ def get_instance_data(domain, prefer_cache=True):
             nickname = result["nickname"]
             pronouns = result["pronouns"]
             bio = result["bio"]
-        elif domain != backend.self_domain:
+        elif not is_self:
             r = requests.get(f"{domain}/api/")
             data = r.json()
 
