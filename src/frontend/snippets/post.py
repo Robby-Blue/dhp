@@ -42,10 +42,10 @@ def generate(data, /, is_post=True, has_reply_button=True, is_link=False):
 
     return div({"class": submission_class, "css": "snippets/post.css"},
         div({"class": "inline-bar"},
-            p({"class": "nickname primary-color"}, nickname),
+            p({"class": "nickname"}, nickname),
             p({"class": "secondary-color secondary-info"}, pronouns),
         ),
         p({"class": "secondary-info"}, instance),
-        p({"class": "text primary-color"}, text),
+        p(text),
         bottom_bar
     )

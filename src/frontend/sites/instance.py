@@ -27,11 +27,11 @@ def get_instance_site(data, err):
             banner(is_cached, "warning", "This data is cached"),
             div({"class": "instance-div"},
                 div({"class": "inline-bar"},
-                    p({"class": "nickname primary-color"}, nickname),
+                    p({"class": "nickname"}, nickname),
                     p({"class": "secondary-color secondary-info"}, pronouns),
                 ),
                 p({"class": "secondary-info"}, domain),
-                p({"class": "primary-color"}, bio)
+                p(bio)
             ),
             p("Posts"),
             *post_elements
