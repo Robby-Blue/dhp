@@ -76,12 +76,11 @@ def render(page_title, page_body):
     head_elements = []
     if page_title:
         head_elements.append(title(page_title))
-    if body_element.css:
-        css_files = body_element.css
-        css_files.append("styles.css")
-        css_string = "\n\n".join([read_css_file(css_file) for css_file in css_files])
+    css_files = body_element.css
+    css_files.append("styles.css")
+    css_string = "\n\n".join([read_css_file(css_file) for css_file in css_files])
 
-        head_elements.append(style(css_string))
+    head_elements.append(style(css_string))
 
     return "<!DOCTYPE html>"+ \
         str(html(

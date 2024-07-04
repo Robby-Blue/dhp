@@ -62,6 +62,21 @@ CREATE TABLE IF NOT EXISTS comments (
 """)
         
         self.execute("""
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id CHAR(36) NOT NULL UNIQUE,
+    instance_domain VARCHAR(267) NOT NULL,
+    sender_domain VARCHAR(267) NOT NULL,
+    text TEXT NOT NULL,
+    sent_at TIMESTAMP NOT NULL,
+    signature BLOB NOT NULL,
+    signature_verified BOOLEAN DEFAULT false,
+    PRIMARY KEY (id),
+    FOREIGN KEY (instance_domain) REFERENCES instances(domain),
+    FOREIGN KEY (sender_domain) REFERENCES instances(domain)
+);
+""")
+        
+        self.execute("""
 CREATE TABLE IF NOT EXISTS task_queue (
     id INT auto_increment,
     retries INT DEFAULT 0,

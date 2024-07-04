@@ -99,6 +99,15 @@ def writereply_post(id):
     id = res["parent_post_id"]
     return redirect(f"/posts/{id}")
 
+@app.route("/chats/", methods=['GET'])
+def chats():
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
+    
+    chats = backend.chats.get_chats()
+    return sites.get_chats_site(chats)
+
 @app.route("/settings/", methods=['GET'])
 def settings():
     token = request.cookies.get("token")
