@@ -1,5 +1,5 @@
 from frontend import *
-from frontend.snippets import post
+from frontend.snippets import sidebar, post
 
 def get_writereply_site(data, err):
     if err:
@@ -13,12 +13,14 @@ def get_writereply_site(data, err):
     form_url = f"/writereply/{id}@{instance}/"
 
     return render("Write Reply",
-        div({"id": "content", "css": "writereply.css"},
-            post(submission, has_reply_button=False, is_post=False),
-            form({"action": form_url, "method": "POST"},
-                textarea({"name": "text"}),
-                br(),
-                input({"type": "submit", "value": "Reply"})
+        sidebar(
+            div({"id": "content", "css": "writereply.css"},
+                post(submission, has_reply_button=False, is_post=False),
+                form({"action": form_url, "method": "POST"},
+                    textarea({"name": "text"}),
+                    br(),
+                    input({"type": "submit", "value": "Reply"})
+                )
             )
         )
     )

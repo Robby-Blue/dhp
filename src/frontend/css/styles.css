@@ -3,6 +3,7 @@ html {
 }
 
 .html, body {
+    margin: 0;
     height: 100vh;
     /* force it to be full height 
        to make the height in text-content work*/
@@ -11,6 +12,7 @@ html {
 p, h1, label {
     font-family: Arial, Helvetica, sans-serif;
     color: rgb(228, 228, 228);
+    margin: 0;
 }
 
 .secondary-info {

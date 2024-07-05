@@ -1,12 +1,15 @@
 from frontend import *
+from frontend.snippets import sidebar
 
 def get_chats_site(chats):
 
     return render("Post",
-        div(
-            {"id": "content", "css": "chats.css"},
-            h1("Chats"),
-            *[create_chat(chat) for chat in chats],
+        sidebar(
+            div(
+                {"id": "content", "css": "chats.css"},
+                h1("Chats"),
+                *[create_chat(chat) for chat in chats],
+            )
         )
     )
 

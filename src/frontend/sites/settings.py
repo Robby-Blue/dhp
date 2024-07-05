@@ -1,17 +1,19 @@
 from frontend import *
-from frontend.snippets import banner
+from frontend.snippets import sidebar, banner
 
 def get_settings_site(data, edited=False):
     return render("Settings",
-        div(
-            {"id": "content", "css": "settings.css"},
-            h1("Settings"),
-            banner(edited, "success", "success"),
-            form({"action": "/settings/", "method": "POST"},
-                *setting("nickname", data["nickname"]),
-                *setting("pronouns", data["pronouns"]),
-                *setting("bio", data["bio"], type="textarea"),
-                input({"type": "submit", "value": "save"})
+        sidebar(
+            div(
+                {"id": "content", "css": "settings.css"},
+                h1("Settings"),
+                banner(edited, "success", "success"),
+                form({"action": "/settings/", "method": "POST"},
+                    *setting("nickname", data["nickname"]),
+                    *setting("pronouns", data["pronouns"]),
+                    *setting("bio", data["bio"], type="textarea"),
+                    input({"type": "submit", "value": "save"})
+                )
             )
         )
     )

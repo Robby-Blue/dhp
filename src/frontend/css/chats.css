@@ -1,6 +1,10 @@
 #content {
     margin: auto;
     width: 50%;
+
+    a {
+        text-decoration: none;
+    }
 }
 
 .chat-container {
@@ -13,10 +17,6 @@
     p {
         margin: 0;
     }
-}
-
-a {
-    text-decoration: none;
 }
 
 .chat-top-bar {

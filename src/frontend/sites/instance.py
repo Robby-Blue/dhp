@@ -1,5 +1,5 @@
 from frontend import *
-from frontend.snippets import post, banner
+from frontend.snippets import sidebar, post, banner
 
 def get_instance_site(data, err):
     if err:
@@ -22,18 +22,20 @@ def get_instance_site(data, err):
     ]
 
     return render("Instance",
-        div(
-            {"id": "content", "css": "instance.css"},
-            banner(is_cached, "warning", "This data is cached"),
-            div({"class": "instance-div"},
-                div({"class": "inline-bar"},
-                    p({"class": "nickname"}, nickname),
-                    p({"class": "secondary-color secondary-info"}, pronouns),
+        sidebar(
+            div(
+                {"id": "content", "css": "instance.css"},
+                banner(is_cached, "warning", "This data is cached"),
+                div({"class": "instance-div"},
+                    div({"class": "inline-bar"},
+                        p({"class": "nickname"}, nickname),
+                        p({"class": "secondary-color secondary-info"}, pronouns),
+                    ),
+                    p({"class": "secondary-info"}, domain),
+                    p(bio)
                 ),
-                p({"class": "secondary-info"}, domain),
-                p(bio)
-            ),
-            p("Posts"),
-            *post_elements
+                h1("Posts"),
+                *post_elements
+            )
         )
     )

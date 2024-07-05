@@ -4,6 +4,10 @@
     padding: 10px;
     margin-bottom: 8px;
     border-radius: 8px;
+
+    a {
+        text-decoration: none;
+    }
 }
 
 .post {
@@ -17,10 +21,6 @@
 .text {
     padding-top: 0.7rem;
     padding-bottom: 0.7rem;
-}
-
-a {
-    text-decoration: none;
 }
 
 .nickname {

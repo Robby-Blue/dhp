@@ -1,5 +1,5 @@
 from frontend import *
-from frontend.snippets import post, banner
+from frontend.snippets import sidebar, post, banner
 
 def get_post_site(data, err):
     if err:
@@ -9,11 +9,13 @@ def get_post_site(data, err):
     is_cached = "is_cached" in data and data["is_cached"]
 
     return render("Post",
-        div(
-            {"id": "content", "css": "posts.css"},
-            banner(is_cached, "warning", "This post is cached"),
-            post(data),
-            create_replies(data["id"], comments_lookup)
+        sidebar(
+            div(
+                {"id": "content", "css": "posts.css"},
+                banner(is_cached, "warning", "This post is cached"),
+                post(data),
+                create_replies(data["id"], comments_lookup)
+            )
         )
     )
 

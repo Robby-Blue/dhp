@@ -1,0 +1,24 @@
+.sidebar-container {
+    display: flex;
+}
+
+.sidebar {
+    background-color: rgb(22, 22, 22);
+    height: 100vh;
+    padding: 10px;
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+
+    h1, p {
+        margin: 0;
+    }
+
+    a {
+        text-decoration: none;
+    }
+}
+
+.sidebar-content {
+    flex-grow: 1;
+}
