@@ -2,8 +2,7 @@ from frontend import *
 from frontend.snippets import sidebar
 
 def get_chats_site(chats):
-
-    return render("Post",
+    return render("Chats",
         sidebar(
             div(
                 {"id": "content", "css": "chats.css"},

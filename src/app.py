@@ -108,6 +108,17 @@ def chats():
     chats = backend.chats.get_chats()
     return sites.get_chats_site(chats)
 
+@app.route("/chats/<path:instance>/", methods=['GET'])
+def chat(instance):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
+    
+    chat, err = backend.chats.get_chat(instance)
+    if err:
+        return format_err(err)
+    return sites.get_chat_site(chat)
+
 @app.route("/settings/", methods=['GET'])
 def settings():
     token = request.cookies.get("token")
@@ -175,7 +186,8 @@ def format_res(res):
     return jsonify(data)
 
 def format_err(err):
-    err.pop("code")
+    if "code" in err:
+        err.pop("code")
     return jsonify(err)
 
 if __name__ == "__main__":
