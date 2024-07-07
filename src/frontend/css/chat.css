@@ -3,13 +3,20 @@
 }
 
 .chat {
-    margin-left: 10px;
     height: inherit;
     display: flex;
     flex-direction: column;
 }
 
+.instance-top-container {
+    background-color: rgb(70, 70, 70);
+    margin-bottom: 10px;
+    padding-left: 10px;
+    text-align: center;
+}
+
 .messages-container {
+    margin-left: 10px;
     flex: 1 1 auto;
     overflow-y: auto;
 }
@@ -36,16 +43,23 @@
 }
 
 .send-container {
+    margin-left: 10px;
     display: flex;
     margin-bottom: 10px;
     margin-right: 10px;
 
-    input {
+    * {
         border: none;
         color: rgb(228, 228, 228);
         background-color: rgb(70, 70, 70);
         border-radius: 10px;
         padding: 10px;
+    }
+
+    textarea {
+        outline: none;
+        resize: none;
+        height: 20px;
     }
 }
 

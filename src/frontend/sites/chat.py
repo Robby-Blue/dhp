@@ -22,12 +22,14 @@ def create_chat_container(chat):
     nickname = instance["nickname"]
 
     return (
-        h1({"class": "title"}, nickname),
+        div({"class": "instance-top-container"},
+            h1({"class": "title"}, nickname),
+        ),
         div({"class": "messages-container"},
             *[create_message(message) for message in messages],
         ),
         form({"class": "send-container", "action": "/chats/send-message/", "method": "POST"},
-            input({"type": "text", "name": "message", "class": "message-input"}),
+            textarea({"name": "message", "class": "message-input"}),
             input({"type": "submit", "value": "Send"})
         )
     )
