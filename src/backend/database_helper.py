@@ -84,9 +84,11 @@ CREATE TABLE IF NOT EXISTS task_queue (
     instance_domain VARCHAR(267) NOT NULL,
     type VARCHAR(25),
     comment_id CHAR(36),
+    message_id CHAR(36),
     PRIMARY KEY (id),
     FOREIGN KEY (instance_domain) REFERENCES instances(domain),
-    FOREIGN KEY (comment_id) REFERENCES comments(id)
+    FOREIGN KEY (comment_id) REFERENCES comments(id),
+    FOREIGN KEY (message_id) REFERENCES chat_messages(id)
 );
 """)
         

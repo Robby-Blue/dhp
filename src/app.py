@@ -119,6 +119,22 @@ def chat(instance):
         return format_err(err)
     return sites.get_chat_site(chat)
 
+@app.route("/chats/<path:instance>/send-message", methods=['POST'])
+def send_message(instance):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return redirect("/login/")
+    form = request.form
+    if not "text" in form:
+        return format_err({"error": "text not given", "code": 400}), 400
+    text = form["text"]
+
+    res, err = backend.chats.send_message(instance, text)
+    if err:
+        return format_err(err)
+    
+    return redirect(f"/chats/{instance}")
+
 @app.route("/settings/", methods=['GET'])
 def settings():
     token = request.cookies.get("token")
@@ -176,6 +192,15 @@ def api_sharecomment():
     domain = json_data["domain"]
     
     res = backend.posts.share_comment(comment, domain)
+    return format_res(res)
+
+@app.route("/api/chats/share-message/", methods=["POST"])
+def api_sharemessage():
+    json_data = request.json
+    message = json_data["message"]
+    domain = json_data["domain"]
+    
+    res = backend.chats.share_message(message, domain)
     return format_res(res)
 
 def format_res(res):

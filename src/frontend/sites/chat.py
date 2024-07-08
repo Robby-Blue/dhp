@@ -21,6 +21,9 @@ def create_chat_container(chat):
     instance = chat["instance"]
     nickname = instance["nickname"]
 
+    domain = instance["domain"]
+    send_url = f"/chats/{domain}/send-message"
+
     return (
         div({"class": "instance-top-container"},
             h1({"class": "title"}, nickname),
@@ -28,8 +31,8 @@ def create_chat_container(chat):
         div({"class": "messages-container"},
             *[create_message(message) for message in messages],
         ),
-        form({"class": "send-container", "action": "/chats/send-message/", "method": "POST"},
-            textarea({"name": "message", "class": "message-input"}),
+        form({"class": "send-container", "action": send_url, "method": "POST"},
+            textarea({"name": "text", "class": "message-input"}),
             input({"type": "submit", "value": "Send"})
         )
     )

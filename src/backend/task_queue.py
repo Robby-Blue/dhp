@@ -1,5 +1,6 @@
 from backend import db
 import backend.posts as posts
+import backend.chats as chats
 from datetime import datetime, timedelta
 import time
 
@@ -11,7 +12,6 @@ def start_task_queue():
 
         if not should_try_any():
             continue
-
         tasks = db.query("SELECT * FROM task_queue;")
         for task in tasks:
             handle_task(task)
@@ -60,6 +60,10 @@ def process_task(task):
         return posts.process_share_comment_task(task)
     if task_type == "verify_comment":
         return posts.process_verify_comment_task(task)
+    if task_type == "share_message":
+        return chats.process_share_message_task(task)
+    if task_type == "verify_message":
+        return chats.process_verify_message_task(task)
     return {"state": "delete"} # idk what to do
 
 def update_next_try_time(tasks):

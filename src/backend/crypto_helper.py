@@ -100,6 +100,19 @@ def stringify_comment(comment):
         remove_scheme_from_url(comment["instance"])
     ])
 
+def stringify_chat_message(message):
+    last_signature = message["last_message_signature"]
+
+    return "\n---\n".join([
+        message["id"],
+        str(message["sent_at"]),
+        str(message["last_message_id"]),
+        signature_to_string(last_signature) if last_signature else str(None),
+        message["text"].replace("-", "\\-"),
+        remove_scheme_from_url(message["sender"]),
+        remove_scheme_from_url(message["receiver"])
+    ])
+
 def remove_scheme_from_url(given_domain):
     parsed_url = urlparse(given_domain)
     domain = parsed_url.hostname
