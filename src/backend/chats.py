@@ -135,6 +135,9 @@ ORDER BY sent_at DESC LIMIT 1
         last_message = results[0]
         last_message_id = last_message["id"]
         last_message_signature = last_message["signature"]
+        last_message_time = last_message["sent_at"]
+        if to_timestamp(last_message_time) > message["sent_at"]:
+            return {"state": "delete", "verified": False}
     else:
         last_message_id = None
         last_message_signature = None
