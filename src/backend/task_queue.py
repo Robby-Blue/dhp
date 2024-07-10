@@ -92,4 +92,7 @@ def get_next_try_time(task):
 
 def add_to_task_queue(statement, values):
     db.execute(statement, values)
+    notify_queue_changed()
+
+def notify_queue_changed():
     next_try["time"] = datetime.now()

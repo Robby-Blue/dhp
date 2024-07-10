@@ -129,7 +129,7 @@ def process_verify_message_task(task):
     last_message_id = message["last_message_id"]
     if last_message_id:
         last_message, _ = get_message(last_message_id)
-        if not last_message:
+        if not last_message or not last_message["signature_verified"]:
             # received in wrong order, try again later when all received
             return {"state": "retry", "verified": False}
 
@@ -164,6 +164,17 @@ ORDER BY sent_at DESC LIMIT 1
     db.execute("UPDATE chat_messages SET signature_verified = true WHERE id = %s",
 (task["message_id"],))
 
+    # if theres any messages depending on this one, verify them too
+    depend_results = db.query(
+"SELECT * FROM chat_messages WHERE last_message_id = %s", (message["id"],))
+    if len(depend_results) == 1:
+        # tell the task_queue to do it now
+        depending_message = depend_results[0]
+        depending_id = depending_message["id"]
+        db.execute(
+"UPDATE task_queue SET last_tried_at = null WHERE type = 'verify_message' AND message_id = %s", (depending_id,))
+        task_queue.notify_queue_changed()
+
     return {
         "state": "success",
         "verified": True
@@ -181,5 +192,6 @@ def get_message(id):
         "text": message["text"],
         "sent_at": to_timestamp(message["sent_at"]),
         "last_message_id": message["last_message_id"],
-        "signature": crypto.signature_to_string(message["signature"])
+        "signature": crypto.signature_to_string(message["signature"]),
+        "signature_verified": message["signature_verified"]
     }, None
