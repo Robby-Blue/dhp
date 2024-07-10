@@ -61,9 +61,9 @@ ORDER BY sent_at DESC LIMIT 1
     }))
 
     db.execute("""
-INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, signature, signature_verified)
-VALUES (%s, %s, %s, %s, %s, %s, true);
-""", (uuid, instance, self_domain, text, from_timestamp(timestamp), signature))
+INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, last_message_id, signature, signature_verified)
+VALUES (%s, %s, %s, %s, %s, %s, %s, true);
+""", (uuid, instance, self_domain, text, from_timestamp(timestamp), last_message_id, signature))
 
     task_queue.add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s) 
@@ -99,6 +99,7 @@ def share_message(message, domain):
     sender = message["sender_domain"]
     text = message["text"]
     sent_at = from_timestamp(message["sent_at"])
+    last_message_id = message["last_message_id"]
     signature = crypto.signature_from_string(message["signature"])
 
     _, err = instances.get_instance_data(domain, True)
@@ -106,9 +107,9 @@ def share_message(message, domain):
         return None, {"error": "instance err", "code": 500}
 
     db.execute("""
-INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, signature, signature_verified)
-VALUES (%s, %s, %s, %s, %s, %s, %s);
-""", (id, domain, domain, text, sent_at, signature, False))
+INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, last_message_id, signature, signature_verified)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+""", (id, domain, domain, text, sent_at, last_message_id, signature, False))
 
     task_queue.add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s) 
@@ -117,13 +118,20 @@ INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s)
 
 def process_verify_message_task(task):
     instance = task["instance_domain"]
-    message = get_message(task["message_id"])[0]
+    message, _ = get_message(task["message_id"])
     signature = crypto.signature_from_string(message["signature"])
 
     pubkey = instances.get_pubkey_of_instance(instance)
 
     if not pubkey:
         return {"state": "retry", "verified": False}
+
+    last_message_id = message["last_message_id"]
+    if last_message_id:
+        last_message, _ = get_message(last_message_id)
+        if not last_message:
+            # received in wrong order, try again later when all received
+            return {"state": "retry", "verified": False}
 
     results = db.query("""
 SELECT * FROM chat_messages
@@ -172,5 +180,6 @@ def get_message(id):
         "sender_domain": message["sender_domain"],
         "text": message["text"],
         "sent_at": to_timestamp(message["sent_at"]),
+        "last_message_id": message["last_message_id"],
         "signature": crypto.signature_to_string(message["signature"])
     }, None

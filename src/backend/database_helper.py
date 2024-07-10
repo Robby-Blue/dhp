@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS comments (
     FOREIGN KEY (instance_domain) REFERENCES instances(domain)
 );
 """)
-        
+
         self.execute("""
 CREATE TABLE IF NOT EXISTS chat_messages (
     id CHAR(36) NOT NULL UNIQUE,
@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     sender_domain VARCHAR(267) NOT NULL,
     text TEXT NOT NULL,
     sent_at TIMESTAMP NOT NULL,
+    last_message_id CHAR(36),
     signature BLOB NOT NULL,
     signature_verified BOOLEAN DEFAULT false,
     PRIMARY KEY (id),
