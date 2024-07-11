@@ -24,7 +24,7 @@ def selfaccount():
     data, err = backend.instances.get_instance_with_posts()
     return sites.get_instance_site(data, err)
 
-@app.route("/instance/<path:instance>/")
+@app.route("/instances/<path:instance>/")
 def account(instance):
     token = request.cookies.get("token")
     if token != TOKEN:
