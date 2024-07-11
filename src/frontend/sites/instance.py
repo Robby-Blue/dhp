@@ -21,7 +21,7 @@ def get_instance_site(data, err):
         for post_data in posts
     ]
 
-    return render("Instance",
+    return render(nickname,
         sidebar(
             div(
                 {"id": "content", "css": "instance.css"},

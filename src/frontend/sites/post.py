@@ -8,7 +8,13 @@ def get_post_site(data, err):
     comments_lookup = create_comments_lookup(data["comments"])
     is_cached = "is_cached" in data and data["is_cached"]
 
-    return render("Post",
+    author = data["author"]
+    nickname = author["nickname"]
+    text = data["text"]
+
+    title = f"{nickname}: '{text}'"
+
+    return render(title,
         sidebar(
             div(
                 {"id": "content", "css": "posts.css"},
