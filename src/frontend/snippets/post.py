@@ -10,7 +10,15 @@ def generate(data, /, is_post=True, has_reply_button=True, is_link=False):
     id = data["id"]
     text = data["text"]
 
-    href = f"/writereply/{id}@{instance}/"
+    submission_class = "submission post" if is_post else "submission"
+
+    author = data["author"]
+
+    nickname = author["nickname"]
+    pronouns = author["pronouns"]
+
+    instance_path = f"/instances/{instance}"
+    reply_path = f"/writereply/{id}@{instance}/"
     
     date_text_element = p(
         {"class": "secondary-info"},
@@ -26,26 +34,21 @@ def generate(data, /, is_post=True, has_reply_button=True, is_link=False):
         bottom_bar = div({"class": "inline-bar space-between"},
             date_element,
             a(
-                {"href": href},
+                {"href": reply_path},
                 button({"class": "reply-button"}, "Reply")
             )
         )
     else:
         bottom_bar = date_element
-    
-    submission_class = "submission post" if is_post else "submission"
-
-    author = data["author"]
-
-    nickname = author["nickname"]
-    pronouns = author["pronouns"]
 
     return div({"class": submission_class, "css": "snippets/post.css"},
-        div({"class": "inline-bar"},
-            p({"class": "nickname"}, nickname),
-            p({"class": "secondary-color secondary-info"}, pronouns),
+        a({"href": instance_path},
+            div({"class": "inline-bar"},
+                p({"class": "nickname"}, nickname),
+                p({"class": "secondary-color secondary-info"}, pronouns),
+            ),
+            p({"class": "secondary-info"}, instance),
         ),
-        p({"class": "secondary-info"}, instance),
         p(text),
         bottom_bar
     )
