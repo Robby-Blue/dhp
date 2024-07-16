@@ -14,23 +14,49 @@ chat_messages.instance_domain = instances.domain;""")
     
     return results
 
-def get_chat(domain):
+def get_chat(domain, before):
     instance, err = instances.get_instance_data(domain)
-
     if err:
         return None, err
 
-    messages = db.query("""
-SELECT * FROM chat_messages
-JOIN instances ON chat_messages.sender_domain = instances.domain
-WHERE instance_domain = %s AND signature_verified
-ORDER BY sent_at ASC;
-""", (domain,))
-    
+    messages, err = get_messages_in_chat(domain, before)
+    if err:
+        return None, err
+
     return {
         "messages": messages,
         "instance": instance
     }, None
+
+def get_messages_in_chat(domain, before_id=None):
+    if before_id:
+        message, err = get_message(before_id)
+        if err:
+            return None, err
+        before_time = from_timestamp(message["sent_at"])
+
+        return db.query("""
+SELECT * FROM (
+    SELECT * FROM chat_messages
+    JOIN instances ON chat_messages.sender_domain = instances.domain
+    WHERE instance_domain = %s AND signature_verified
+    AND sent_at < %s
+    ORDER BY sent_at DESC
+    LIMIT 10
+) sub
+ORDER BY sent_at ASC;
+    """, (domain, before_time)), None
+
+    return db.query("""
+SELECT * FROM (
+    SELECT * FROM chat_messages
+    JOIN instances ON chat_messages.sender_domain = instances.domain
+    WHERE instance_domain = %s AND signature_verified
+    ORDER BY sent_at DESC
+    LIMIT 10
+) sub
+ORDER BY sent_at ASC;
+""", (domain,)), None
 
 def send_message(instance, text):
     results = db.query("""

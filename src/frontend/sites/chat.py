@@ -28,13 +28,16 @@ def create_chat_container(chat):
         div({"class": "instance-top-container"},
             h1({"class": "title"}, nickname),
         ),
-        div({"class": "messages-container"},
-            *[create_message(message) for message in messages],
-        ),
+        create_messages_container(messages),
         form({"class": "send-container", "action": send_url, "method": "POST"},
             textarea({"name": "text", "class": "message-input"}),
             input({"type": "submit", "value": "Send"})
         )
+    )
+
+def create_messages_container(messages):
+    return div({"class": "messages-container"},
+        *[create_message(message) for message in messages],
     )
 
 def create_message(message):
@@ -47,5 +50,5 @@ def create_message(message):
             p(nickname),
             p({"class": "secondary-info"}, domain)
         ),
-        p({"class": "secondary-info"}, text)
+        p({"class": "secondary-info"}, text),
     )

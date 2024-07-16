@@ -114,7 +114,9 @@ def chat(instance):
     if token != TOKEN:
         return redirect("/login/")
     
-    chat, err = backend.chats.get_chat(instance)
+    before = request.args.get("before", default=None)
+
+    chat, err = backend.chats.get_chat(instance, before)
     if err:
         return format_err(err)
     return sites.get_chat_site(chat)
