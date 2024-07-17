@@ -6,6 +6,8 @@ import backend.crypto_helper as crypto
 from datetime import datetime
 import requests
 
+MESSAGES_PER_PAGE = 10
+
 def get_chats():
     results = db.query("""
 SELECT DISTINCT instance_domain, instances.nickname, instances.pronouns
@@ -14,12 +16,12 @@ chat_messages.instance_domain = instances.domain;""")
     
     return results
 
-def get_chat(domain, before):
+def get_chat(domain, before=None, after=None):
     instance, err = instances.get_instance_data(domain)
     if err:
         return None, err
 
-    messages, err = get_messages_in_chat(domain, before)
+    messages, err = get_messages_in_chat(domain, before, after)
     if err:
         return None, err
 
@@ -28,35 +30,68 @@ def get_chat(domain, before):
         "instance": instance
     }, None
 
-def get_messages_in_chat(domain, before_id=None):
+def get_messages_in_chat(domain, before_id=None, after_id=None):
+    # load one more but dont return it
+    # use it to figure out if theres more
+    # or if it loaded all
+    messages_to_load = MESSAGES_PER_PAGE + 1
+
     if before_id:
         message, err = get_message(before_id)
         if err:
             return None, err
         before_time = from_timestamp(message["sent_at"])
 
-        return db.query("""
+        messages = db.query("""
 SELECT * FROM (
     SELECT * FROM chat_messages
     JOIN instances ON chat_messages.sender_domain = instances.domain
     WHERE instance_domain = %s AND signature_verified
     AND sent_at < %s
     ORDER BY sent_at DESC
-    LIMIT 10
+    LIMIT %s
 ) sub
 ORDER BY sent_at ASC;
-    """, (domain, before_time)), None
+""", (domain, before_time, messages_to_load))
+        to_pop = 0
+    elif after_id:
+        message, err = get_message(after_id)
+        if err:
+            return None, err
+        after_time = from_timestamp(message["sent_at"])
 
-    return db.query("""
+        messages = db.query("""
+SELECT * FROM chat_messages
+JOIN instances ON chat_messages.sender_domain = instances.domain
+WHERE instance_domain = %s AND signature_verified
+AND sent_at > %s
+ORDER BY sent_at ASC
+LIMIT %s;
+""", (domain, after_time, messages_to_load))
+        to_pop = -1
+    else:
+        messages = db.query("""
 SELECT * FROM (
     SELECT * FROM chat_messages
     JOIN instances ON chat_messages.sender_domain = instances.domain
     WHERE instance_domain = %s AND signature_verified
     ORDER BY sent_at DESC
-    LIMIT 10
+    LIMIT %s
 ) sub
 ORDER BY sent_at ASC;
-""", (domain,)), None
+""", (domain, messages_to_load))
+        to_pop = 0
+
+    has_more = len(messages) == messages_to_load
+    if has_more:
+        messages.pop(to_pop)
+
+    return {
+        "messages": messages,
+        "before": before_id,
+        "after": after_id,
+        "has_more": has_more
+    }, None
 
 def send_message(instance, text):
     results = db.query("""

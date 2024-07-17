@@ -67,3 +67,19 @@
     flex-grow: 1;
     margin-right: 10px;
 }
+
+.load-more-button {
+    margin-bottom: 10px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    border: none;
+    background-color: rgb(70, 70, 70);
+    border-radius: 10px;
+    padding: 5px 10px;
+    
+    a {
+        color: rgb(228, 228, 228);
+	text-decoration: none;
+    }
+}
