@@ -1,4 +1,5 @@
 Flask
+flask_sock
 python-dotenv
 mysql-connector-python
 cryptography

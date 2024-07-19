@@ -2,6 +2,7 @@ from threading import Thread
 import os
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, redirect
+from flask_sock import Sock
 
 from frontend import sites
 
@@ -14,6 +15,7 @@ import backend.task_queue
 
 # web server
 app = Flask(__name__)
+sock = Sock(app)
 
 # front end
 @app.route("/")
@@ -116,10 +118,13 @@ def chat(instance):
     
     before = request.args.get("before", default=None)
     after = request.args.get("after", default=None)
-    
+    messages_only = request.args.get("messages_only", default=False)
+
     chat, err = backend.chats.get_chat(instance, before, after)
     if err:
         return format_err(err)
+    if messages_only:
+        return str(sites.create_messages_container(chat["messages"]))
     return sites.get_chat_site(chat)
 
 @app.route("/chats/<path:instance>/send-message", methods=['POST'])
@@ -174,7 +179,19 @@ def login_post():
     response.set_cookie("token", token, httponly=True, secure=True, samesite='Strict')
     return response
 
-# api
+# ws events
+@sock.route("/ws/chats/<path:instance>/")
+def echo(ws, instance):
+    token = request.cookies.get("token")
+    if token != TOKEN:
+        return
+    backend.events.add_listener(ws, f"chat/{instance}")
+    
+    # if i dont do this it disconnects
+    while True:
+        ws.receive()
+
+# public api
 @app.route("/api/")
 def api_index():
     return format_res(backend.instances.get_index())

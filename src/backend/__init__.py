@@ -51,3 +51,4 @@ db.setup()
 import backend.posts as posts
 import backend.instances as instances
 import backend.chats as chats
+import backend.events as events

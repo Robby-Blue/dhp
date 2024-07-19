@@ -5,4 +5,5 @@ from frontend.sites.writepost import get_writepost_site
 from frontend.sites.writereply import get_writereply_site
 from frontend.sites.chats import get_chats_site
 from frontend.sites.chat import get_chat_site
+from frontend.sites.chat import create_messages_container
 from frontend.sites.settings import get_settings_site

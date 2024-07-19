@@ -37,7 +37,16 @@ def create_chat_container(chat):
 
 def create_messages_container(message_data):
     messages = message_data["messages"]
+    
+    if len(messages) == 0:
+        return div({"class": "messages-container"},
+            p("so empty"),
+            script(src="chat/reload.js")
+        )
+    
     has_more = message_data["has_more"]
+
+    has_query = message_data["before"] or message_data["after"]
 
     load_older_button = None
     can_load_older = has_more or not message_data["before"]
@@ -49,7 +58,7 @@ def create_messages_container(message_data):
         )
     
     load_newer_button = None
-    can_load_newer = message_data["before"] or (message_data["after"] and has_more)
+    can_load_newer = message_data["before"] or (has_more and message_data["after"])
     if can_load_newer:
         last_message_id = messages[-1]["id"]
         newer_url = f"?after={last_message_id}"
@@ -57,13 +66,14 @@ def create_messages_container(message_data):
             a({"href": newer_url}, "load newer")
         )
 
-    scroll_down = message_data["before"]
+    scroll_down = not message_data["after"]
 
     return div({"class": "messages-container", "id": "messages-container"},
         load_older_button,
         *[create_message(message) for message in messages],
         load_newer_button,
-        script(src="chat/scroll_down.js") if scroll_down else None
+        script(src="chat/scroll_down.js") if scroll_down else None,
+        script(src="chat/reload.js") if not can_load_newer else None
     )
 
 def create_message(message):

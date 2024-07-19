@@ -1,6 +1,7 @@
 from backend import db
 from backend import instances
 from backend import task_queue
+from backend import events
 from backend import self_domain, generate_id, to_timestamp, from_timestamp
 import backend.crypto_helper as crypto
 from datetime import datetime
@@ -235,6 +236,8 @@ ORDER BY sent_at DESC LIMIT 1
         db.execute(
 "UPDATE task_queue SET last_tried_at = null WHERE type = 'verify_message' AND message_id = %s", (depending_id,))
         task_queue.notify_queue_changed()
+
+    events.send_event(f"chat/{instance}")
 
     return {
         "state": "success",
