@@ -57,10 +57,13 @@ def create_messages_container(message_data):
             a({"href": newer_url}, "load newer")
         )
 
-    return div({"class": "messages-container"},
+    scroll_down = message_data["before"]
+
+    return div({"class": "messages-container", "id": "messages-container"},
         load_older_button,
         *[create_message(message) for message in messages],
         load_newer_button,
+        script(src="chat/scroll_down.js") if scroll_down else None
     )
 
 def create_message(message):

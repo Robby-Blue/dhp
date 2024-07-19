@@ -1,13 +1,14 @@
 import os
 from html import escape
 
-css_cache = {}
+assets_cache = {}
 
 class HtmlElement():
 
-    def __init__(self, tag, args, *, self_closing=False):
+    def __init__(self, tag, args, *, self_closing=False, safe=True):
         self.tag = tag
         self.self_closing = self_closing
+        self.safe = safe
 
         if len(args) > 0 and isinstance(args[0], dict):
             # its an attributes dict
@@ -17,10 +18,16 @@ class HtmlElement():
             self.attributes = {}
             self.children = args
 
+        self.children = [*self.children]
+
         self.css = []
         if "css" in self.attributes:
             self.css = [self.attributes["css"]]
             self.attributes.pop("css")
+        self.js = []
+        if "js" in self.attributes:
+            self.js = [self.attributes["js"]]
+            self.attributes.pop("js")
 
         for child in self.children:
             if not isinstance(child, HtmlElement):
@@ -28,6 +35,9 @@ class HtmlElement():
             for css in child.css:
                 if css not in self.css:
                     self.css.append(css)
+            for js in child.js:
+                if js not in self.js:
+                    self.js.append(js)
 
     def __str__(self):
         attributes_str = ""
@@ -40,7 +50,7 @@ class HtmlElement():
         for child in self.children:
             if child is None:
                 continue
-            if isinstance(child, str):
+            if isinstance(child, str) and self.safe:
                 inner_html += escape(child)
             else:
                 inner_html += str(child)
@@ -50,20 +60,20 @@ class HtmlElement():
         else:
             return f"<{self.tag}{attributes_str}>{inner_html}</{self.tag}>"
 
-def read_css_file(file_name):
-    if file_name in css_cache:
-        return css_cache[file_name]
+def read_asset_file(file_type, file_name):
+    if file_name in assets_cache:
+        return assets_cache[file_name]
 
     script_dir = os.path.dirname(__file__)
-    css_folder = os.path.join(script_dir, "css/")
-    css_file_path = os.path.join(css_folder, file_name)
+    folder = os.path.join(script_dir, file_type)
+    file_path = os.path.join(folder, file_name)
 
-    with open(css_file_path, "r") as css_file:
-        css_string = css_file.read()
+    with open(file_path, "r") as file:
+        content = file.read()
     
-    css_cache[file_name] = css_string
+    assets_cache[file_name] = content
     
-    return css_string
+    return content
 
 def render(page_title, page_body):
     # turn it into a list if it isnt one,
@@ -78,9 +88,13 @@ def render(page_title, page_body):
         head_elements.append(title(page_title))
     css_files = body_element.css
     css_files.append("styles.css")
-    css_string = "\n\n".join([read_css_file(css_file) for css_file in css_files])
+    css_string = "\n\n".join([read_asset_file("css", css_file) for css_file in css_files])
 
     head_elements.append(style(css_string))
+
+    js_files = body_element.js
+    for js_file in js_files:
+        body_element.children.append(script(read_asset_file("js", js_file)))
 
     return "<!DOCTYPE html>"+ \
         str(html(
@@ -142,3 +156,8 @@ def textarea(*args):
 
 def br(*args):
     return HtmlElement("br", args, self_closing=True)
+
+def script(*args, **kwargs):
+    if "src" in kwargs:
+        return HtmlElement("script", [*args, read_asset_file("js", kwargs["src"])], safe=False)
+    return HtmlElement("script", args, safe=False)
