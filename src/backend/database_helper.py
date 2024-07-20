@@ -1,17 +1,45 @@
 import os
-import mysql.connector
+import threading
+import mysql.connector.pooling
 from backend import self_domain
 import backend.crypto_helper as crypto
 
 class DatabaseHelper:
+
+    connections = {}
+
     def connect(self):
-        self.connection = mysql.connector.connect(
+        self.pool = mysql.connector.pooling.MySQLConnectionPool(
             host=os.getenv("DB_HOST"),
             user=os.getenv("DB_USERNAME"),
             password=os.getenv("DB_PASSWORD"),
-            database=os.getenv("DB_DATABASE")
+            database=os.getenv("DB_DATABASE"),
+            pool_size=5
         )
-        self.cursor = self.connection.cursor(dictionary=True)
+
+    def get_connection(self):
+        connection = self.pool.get_connection()
+        cursor = connection.cursor(dictionary=True)
+        return connection, cursor
+
+    def query(self, statement, values=()):
+        connection, cursor = self.get_connection()
+        cursor.execute(statement, values)
+        result = cursor.fetchall()
+        connection.close()
+        return result
+
+    def execute(self, statement, values=()):
+        connection, cursor = self.get_connection()
+        cursor.execute(statement, values)
+        connection.commit()
+        connection.close()
+
+    def execute_many(self, statement, values=[()]):
+        connection, cursor = self.get_connection()
+        cursor.executemany(statement, values)
+        connection.commit()
+        connection.close()
 
     def setup(self):
         # max domain length is 267 bc 253 for actual domain
@@ -98,15 +126,3 @@ CREATE TABLE IF NOT EXISTS task_queue (
 "SELECT * FROM instances WHERE domain = %s", (self_domain,)):
             self.execute("INSERT INTO instances (is_self, domain, public_key, nickname, pronouns, bio) VALUES (%s, %s, %s, %s, %s, %s)",
                 (True, self_domain, crypto.get_public_pem(), self_domain, "not set", ":D"))
-
-    def query(self, statement, values=()):
-        self.cursor.execute(statement, values)
-        return self.cursor.fetchall()
-
-    def execute(self, statement, values=()):
-        self.cursor.execute(statement, values)
-        self.connection.commit()
-
-    def execute_many(self, statement, values=[()]):
-        self.cursor.executemany(statement, values)
-        self.connection.commit()

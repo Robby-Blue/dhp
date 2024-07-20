@@ -188,8 +188,7 @@ def echo(ws, instance):
     backend.events.add_listener(ws, f"chat/{instance}")
     
     # if i dont do this it disconnects
-    while True:
-        ws.receive()
+    ws.receive()
 
 # public api
 @app.route("/api/")
