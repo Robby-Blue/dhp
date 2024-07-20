@@ -11,9 +11,17 @@ MESSAGES_PER_PAGE = 10
 
 def get_chats():
     results = db.query("""
-SELECT DISTINCT instance_domain, instances.nickname, instances.pronouns
-FROM chat_messages JOIN instances ON
-chat_messages.instance_domain = instances.domain;""")
+SELECT DISTINCT msgs.instance_domain, i.nickname, i.pronouns, msgs.text, sender_i.nickname AS sender_nickname
+FROM chat_messages msgs
+JOIN instances i ON msgs.instance_domain = domain
+JOIN (
+    SELECT instance_domain, MAX(received_at) AS latest_received_at
+    FROM chat_messages
+    WHERE signature_verified
+    GROUP BY instance_domain
+) latest_messages ON msgs.instance_domain = latest_messages.instance_domain AND msgs.received_at = latest_messages.latest_received_at
+JOIN instances sender_i ON msgs.sender_domain = sender_i.domain;
+""")
     
     return results
 
@@ -111,6 +119,7 @@ ORDER BY sent_at DESC LIMIT 1
 
     uuid = generate_id()
     timestamp = to_timestamp(datetime.now())
+    now = from_timestamp(timestamp)
 
     signature = crypto.sign_string(crypto.stringify_chat_message({
         "id": uuid,
@@ -123,9 +132,9 @@ ORDER BY sent_at DESC LIMIT 1
     }))
 
     db.execute("""
-INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, last_message_id, signature, signature_verified)
-VALUES (%s, %s, %s, %s, %s, %s, %s, true);
-""", (uuid, instance, self_domain, text, from_timestamp(timestamp), last_message_id, signature))
+INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, received_at, last_message_id, signature, signature_verified)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, true);
+""", (uuid, instance, self_domain, text, now, now, last_message_id, signature))
 
     task_queue.add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s) 
@@ -168,10 +177,13 @@ def share_message(message, domain):
     if err:
         return None, {"error": "instance err", "code": 500}
 
+    timestamp = to_timestamp(datetime.now())
+    now = from_timestamp(timestamp)
+
     db.execute("""
-INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, last_message_id, signature, signature_verified)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-""", (id, domain, domain, text, sent_at, last_message_id, signature, False))
+INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, received_at, last_message_id, signature, signature_verified)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+""", (id, domain, domain, text, sent_at, now, last_message_id, signature, False))
 
     task_queue.add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s) 

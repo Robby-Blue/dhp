@@ -15,6 +15,10 @@ def get_chats_site(chats):
 def create_chat(chat):
     nickname = chat["nickname"]
     domain = chat["instance_domain"]
+    
+    last_text = chat["text"]
+    last_sender = chat["sender_nickname"]
+    preview_text = last_text[:100].replace("\n", " ")
 
     url = f"/chats/{domain}"
 
@@ -24,6 +28,6 @@ def create_chat(chat):
                 p(nickname),
                 p({"class": "secondary-info"}, domain)
             ),
-            p({"class": "secondary-info"}, "Lorem Ipsum")
+            p({"class": "secondary-info"}, f"{last_sender}: {preview_text}")
         )
     )
