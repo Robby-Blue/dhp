@@ -20,10 +20,13 @@ def create_chat(chat):
     last_sender = chat["sender_nickname"]
     preview_text = last_text[:100].replace("\n", " ")
 
+    is_unread = not chat["is_read"]
+
     url = f"/chats/{domain}"
 
     return a({"href": url},
         div({"class": "chat-container"},
+            div({"class": "unread-banner"}) if is_unread else None,
             div({"class": "chat-top-bar"},
                 p(nickname),
                 p({"class": "secondary-info"}, domain)

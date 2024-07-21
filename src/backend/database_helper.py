@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     sender_domain VARCHAR(267) NOT NULL,
     text TEXT NOT NULL,
     sent_at TIMESTAMP NOT NULL,
+    is_read BOOL DEFAULT FALSE,
     received_at TIMESTAMP NOT NULL,
     last_message_id CHAR(36),
     signature BLOB NOT NULL,

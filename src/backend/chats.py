@@ -11,7 +11,7 @@ MESSAGES_PER_PAGE = 10
 
 def get_chats():
     results = db.query("""
-SELECT DISTINCT msgs.instance_domain, i.nickname, i.pronouns, msgs.text, sender_i.nickname AS sender_nickname
+SELECT DISTINCT msgs.instance_domain, i.nickname, i.pronouns, msgs.text, msgs.is_read, sender_i.nickname AS sender_nickname
 FROM chat_messages msgs
 JOIN instances i ON msgs.instance_domain = domain
 JOIN (
@@ -91,6 +91,9 @@ ORDER BY sent_at ASC;
 """, (domain, messages_to_load))
         to_pop = 0
 
+        # mark as read if they see the newwest messages
+        mark_chat_as_read(domain)
+
     has_more = len(messages) == messages_to_load
     if has_more:
         messages.pop(to_pop)
@@ -132,9 +135,9 @@ ORDER BY sent_at DESC LIMIT 1
     }))
 
     db.execute("""
-INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, received_at, last_message_id, signature, signature_verified)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, true);
-""", (uuid, instance, self_domain, text, now, now, last_message_id, signature))
+INSERT INTO chat_messages (id, instance_domain, sender_domain, text, sent_at, is_read, received_at, last_message_id, signature, signature_verified)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true);
+""", (uuid, instance, self_domain, text, now, True, now, last_message_id, signature))
 
     task_queue.add_to_task_queue("""
 INSERT INTO task_queue (type, instance_domain, message_id) VALUES (%s, %s, %s) 
@@ -256,6 +259,10 @@ ORDER BY sent_at DESC LIMIT 1
         "verified": True
     }
 
+def mark_chat_as_read(instance):
+    db.execute(
+"UPDATE chat_messages SET is_read=true WHERE instance_domain = %s;", (instance ,))
+
 def get_message(id):
     results = db.query("SELECT * FROM chat_messages WHERE id = %s", (id,))
     if len(results) == 0:
@@ -267,6 +274,7 @@ def get_message(id):
         "sender_domain": message["sender_domain"],
         "text": message["text"],
         "sent_at": to_timestamp(message["sent_at"]),
+        "read": bool(message["is_read"]),
         "last_message_id": message["last_message_id"],
         "signature": crypto.signature_to_string(message["signature"]),
         "signature_verified": message["signature_verified"]
